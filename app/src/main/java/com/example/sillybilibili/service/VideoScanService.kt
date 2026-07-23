@@ -14,8 +14,10 @@
 package com.example.sillybilibili.service
 
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
 import com.example.sillybilibili.domain.repository.VideoRepository
+import com.example.sillybilibili.util.SafFileHelper
 import com.example.sillybilibili.util.ShizukuFileHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
@@ -37,6 +39,7 @@ private const val BATCH_SIZE = 8
 class VideoScanService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuHelper: ShizukuFileHelper,
+    private val safHelper: SafFileHelper,
     private val videoRepository: VideoRepository
 ) {
     companion object {
@@ -243,6 +246,112 @@ class VideoScanService @Inject constructor(
         }
 
         emit(ScanProgress(phase = ScanPhase.COMPLETE, totalFolders = totalFolders, skippedFolders = skippedCount, filteredFolders = filteredCount - totalCandidates, newFolders = totalCandidates, foundVideoCount = scannedVideos.size, statusMessage = "Done: ${scannedVideos.size} new videos saved"))
+    }
+
+    /**
+     * SAF-based scan — user selects the download directory via system file picker.
+     * No Shizuku required, but slower (SAF uses content:// URIs, one call per file).
+     */
+    fun scanDirectoryFromUri(treeUri: Uri, filter: ScanFilter? = null): Flow<ScanProgress> = flow {
+        val f = filter ?: ScanFilter()
+        if (!safHelper.isDirectory(treeUri)) {
+            emit(ScanProgress(phase = ScanPhase.ERROR, statusMessage = "Invalid directory"))
+            return@flow
+        }
+
+        emit(ScanProgress(phase = ScanPhase.COUNTING, statusMessage = "Listing folders..."))
+
+        val allAvidNames = withContext(Dispatchers.IO) {
+            safHelper.listDirectories(treeUri).filter { it.all { c -> c.isDigit() } }
+        }
+
+        val avidDirNames = if (f.specificAvIds != null)
+            allAvidNames.filter { it.toLongOrNull() in f.specificAvIds!! }
+        else allAvidNames
+
+        val totalFolders = avidDirNames.size
+        if (totalFolders == 0) {
+            emit(ScanProgress(phase = ScanPhase.ERROR, statusMessage = "No video folders found"))
+            return@flow
+        }
+
+        emit(ScanProgress(phase = ScanPhase.COUNTING, totalFolders = totalFolders, statusMessage = "Found $totalFolders folders"))
+
+        val existingAvIds = withContext(Dispatchers.IO) { videoRepository.getAllAvIds().toSet() }
+        val newAvidNames = avidDirNames.filter { it.toLongOrNull() !in existingAvIds }
+        val skippedCount = totalFolders - newAvidNames.size
+
+        if (newAvidNames.isEmpty()) {
+            emit(ScanProgress(phase = ScanPhase.COUNTING, totalFolders = totalFolders, skippedFolders = skippedCount, newFolders = 0, statusMessage = "All already scanned"))
+            return@flow
+        }
+
+        emit(ScanProgress(phase = ScanPhase.PROCESSING, totalFolders = totalFolders, skippedFolders = skippedCount, newFolders = newAvidNames.size))
+
+        val scannedVideos = mutableListOf<ScannedVideo>()
+
+        for ((idx, avidName) in newAvidNames.withIndex()) {
+            val avidUri = safHelper.findChild(treeUri, avidName) ?: continue
+            val vid = withContext(Dispatchers.IO) { scanAvIdDirectorySaf(avidUri, avidName, f.mode) }
+            if (vid != null) scannedVideos.add(vid)
+            emit(ScanProgress(phase = ScanPhase.PROCESSING, totalFolders = totalFolders, skippedFolders = skippedCount, newFolders = newAvidNames.size, processedFolders = idx + 1, foundVideoCount = scannedVideos.size))
+        }
+
+        emit(ScanProgress(phase = ScanPhase.SAVING, foundVideoCount = scannedVideos.size, statusMessage = "Saving..."))
+        if (scannedVideos.isNotEmpty()) {
+            withContext(Dispatchers.IO) { videoRepository.insertVideos(scannedVideos.map { it.toDomainModel() }) }
+        }
+        emit(ScanProgress(phase = ScanPhase.COMPLETE, foundVideoCount = scannedVideos.size, statusMessage = "Done: ${scannedVideos.size} videos"))
+    }
+
+    // SAF: scan a single av directory
+    private fun scanAvIdDirectorySaf(avidUri: Uri, avidName: String, mode: ScanMode): ScannedVideo? {
+        val cidDirName = safHelper.listSubDirectoriesWithEntryJson(avidUri).firstOrNull() ?: return null
+        val cidUri = safHelper.findChild(avidUri, cidDirName) ?: return null
+
+        val entryJsonUri = safHelper.findChild(cidUri, "entry.json") ?: return null
+        val entryContent = safHelper.readFileContent(entryJsonUri) ?: return null
+        val entryJson = try { org.json.JSONObject(entryContent) } catch (_: Exception) { return null }
+
+        val title = sanitizeFileName(entryJson.optString("title", avidName))
+        val ownerName = entryJson.optString("owner_name", "")
+        val quality = entryJson.optString("quality_pithy_description", "")
+        val pageData = entryJson.optJSONObject("page_data")
+        val cid = pageData?.optLong("cid", 0L) ?: 0L
+        val width = pageData?.optInt("width", 0) ?: 0
+        val height = pageData?.optInt("height", 0) ?: 0
+        val typeTag = entryJson.optString("type_tag", "0")
+        val duration = entryJson.optLong("total_time_milli", 0L)
+
+        val typeTagUri = safHelper.findChild(cidUri, typeTag) ?: return null
+
+        if (mode == ScanMode.FULL && !safHelper.checkVideoFilesExist(typeTagUri)) return null
+
+        val size = if (mode == ScanMode.FULL) {
+            val info = safHelper.getVideoFileInfo(typeTagUri) ?: return null
+            info.first + info.second
+        } else {
+            entryJson.optLong("total_bytes", 0L)
+        }
+
+        val coverUri = safHelper.findChild(cidUri, "cover.jpg")
+        val coverPath = if (coverUri != null) {
+            val bytes = safHelper.readBinaryFile(coverUri)
+            if (bytes != null) {
+                val cacheDir = java.io.File(context.cacheDir, "covers")
+                if (!cacheDir.exists()) cacheDir.mkdirs()
+                val cacheFile = java.io.File(cacheDir, "${avidName}_${cidDirName}.jpg")
+                if (!cacheFile.exists()) cacheFile.writeBytes(bytes)
+                cacheFile.absolutePath
+            } else null
+        } else null
+
+        return ScannedVideo(
+            avid = avidName.toLongOrNull() ?: 0L, cid = cid, title = title, ownerName = ownerName,
+            quality = quality, width = width, height = height,
+            path = typeTagUri.toString(), audioPath = typeTagUri.toString(),
+            coverPath = coverPath, size = size, duration = duration, parentFolder = avidName
+        )
     }
 
     // ============================================================

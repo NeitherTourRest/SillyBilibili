@@ -88,6 +88,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
 
+    // SAF (Storage Access Framework) — document file access without Shizuku
+    implementation("androidx.documentfile:documentfile:1.0.1")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.12")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")

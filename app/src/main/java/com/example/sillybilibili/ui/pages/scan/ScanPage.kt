@@ -1,13 +1,18 @@
 package com.example.sillybilibili.ui.pages.scan
 
+import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +34,11 @@ fun ScanPage(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
 
+    // SAF directory picker
+    val safPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        viewModel.setSafTreeUri(uri)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -43,18 +53,54 @@ fun ScanPage(
             modifier = Modifier.fillMaxSize().padding(paddingValues).verticalScroll(scrollState).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Shizuku status
-            if (!uiState.isShizukuAvailable) {
-                Card(colors = CardDefaults.cardColors(containerColor = NeonRed.copy(alpha = 0.1f)), shape = RoundedCornerShape(0.dp)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Storage, null, tint = NeonRed)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Shizuku not available — required for Android 11+", color = NeonRed, style = MaterialTheme.typography.bodySmall)
+            // Shizuku / SAF mode selection
+            Card(colors = CardDefaults.cardColors(containerColor = DarkCard), shape = RoundedCornerShape(0.dp)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Mode toggle
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(if (uiState.useSaf) "Mode: SAF (System Picker)" else "Mode: Shizuku", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = if (uiState.useSaf) CyberGold else CyberVermilion)
+                        Switch(
+                            checked = uiState.useSaf, onCheckedChange = { viewModel.toggleMode() },
+                            enabled = uiState.isShizukuAvailable || uiState.safTreeUri != null,
+                            colors = SwitchDefaults.colors(checkedThumbColor = CyberGold, checkedTrackColor = CyberGold.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    if (uiState.useSaf) {
+                        // SAF: choose directory button
+                        Button(
+                            onClick = { safPicker.launch(null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberGold)
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, tint = Color.Black)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (uiState.safTreeUri != null) "Directory selected ✓" else "Choose Bilibili download folder",
+                                fontWeight = FontWeight.Bold, color = Color.Black
+                            )
+                        }
+                        if (uiState.safTreeUri != null) {
+                            Text("✓ SAF directory ready", style = MaterialTheme.typography.bodySmall, color = NeonGreen)
+                        }
+                    } else {
+                        // Shizuku status
+                        if (!uiState.isShizukuAvailable) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, null, tint = NeonRed, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Shizuku not available — switch to SAF", color = NeonRed, style = MaterialTheme.typography.bodySmall)
+                            }
+                        } else {
+                            Text("✓ Shizuku connected", style = MaterialTheme.typography.bodySmall, color = NeonGreen)
+                        }
                     }
                 }
             }
 
-            // Scan path
+            // Scan path (Shizuku mode only)
+            if (!uiState.useSaf) {
             Text("Scan Path", style = MaterialTheme.typography.labelMedium, color = Color(0xFF8080A0))
             OutlinedTextField(
                 value = uiState.scanPath, onValueChange = { viewModel.updateScanPath(it) },
@@ -66,6 +112,8 @@ fun ScanPage(
                     focusedContainerColor = DarkSurfaceVariant, unfocusedContainerColor = DarkSurfaceVariant
                 )
             )
+
+            } // end if (!uiState.useSaf)
 
             // Filters section
             Text("Filters", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = CyberGold)
