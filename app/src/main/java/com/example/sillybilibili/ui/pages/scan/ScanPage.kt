@@ -61,12 +61,23 @@ fun ScanPage(
                         Text(if (uiState.useSaf) "Mode: SAF (System Picker)" else "Mode: Shizuku", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = if (uiState.useSaf) CyberGold else CyberVermilion)
                         Switch(
                             checked = uiState.useSaf, onCheckedChange = { viewModel.toggleMode() },
-                            enabled = uiState.isShizukuAvailable || uiState.safTreeUri != null,
+                            enabled = (uiState.isShizukuAvailable || uiState.safTreeUri != null) && uiState.safCanAccessAndroidData,
                             colors = SwitchDefaults.colors(checkedThumbColor = CyberGold, checkedTrackColor = CyberGold.copy(alpha = 0.3f))
                         )
                     }
 
-                    if (uiState.useSaf) {
+                    // SAF limitation warning on Android 11+
+                    if (!uiState.safCanAccessAndroidData) {
+                        Card(colors = CardDefaults.cardColors(containerColor = NeonRed.copy(alpha = 0.1f)), shape = RoundedCornerShape(0.dp)) {
+                            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, null, tint = NeonRed, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(uiState.safLimitationMessage, color = NeonRed, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+
+                    if (uiState.useSaf && uiState.safCanAccessAndroidData) {
                         // SAF: choose directory button
                         Button(
                             onClick = { safPicker.launch(null) },
@@ -90,7 +101,7 @@ fun ScanPage(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Warning, null, tint = NeonRed, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("Shizuku not available — switch to SAF", color = NeonRed, style = MaterialTheme.typography.bodySmall)
+                                Text("Shizuku not available — required on Android 11+", color = NeonRed, style = MaterialTheme.typography.bodySmall)
                             }
                         } else {
                             Text("✓ Shizuku connected", style = MaterialTheme.typography.bodySmall, color = NeonGreen)

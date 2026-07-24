@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sillybilibili.service.SettingsService
 import com.example.sillybilibili.service.VideoScanService
+import com.example.sillybilibili.util.SafCapabilityChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,8 @@ data class ScanUiState(
     val scanResultMessage: String = "",
     val isShizukuAvailable: Boolean = false,
     val useSaf: Boolean = false,
+    val safCanAccessAndroidData: Boolean = true,
+    val safLimitationMessage: String = "",
     val filterQuality: String? = null,
     val filterMinDurationSec: String = "",
     val filterMaxDurationSec: String = "",
@@ -45,12 +48,15 @@ class ScanViewModel @Inject constructor(
         val shizukuOk = videoScanService.isShizukuAvailable()
         val savedUri = loadSavedSafUri()
         val savedPath = settingsService.scanPath ?: videoScanService.getBilibiliPathConstant()
+        val safCanAccessData = SafCapabilityChecker.canAccessAndroidData()
         _uiState.update {
             it.copy(
                 scanPath = savedPath,
                 safTreeUri = savedUri,
                 isShizukuAvailable = shizukuOk,
-                useSaf = !shizukuOk && savedUri != null
+                useSaf = safCanAccessData && !shizukuOk && savedUri != null,
+                safCanAccessAndroidData = safCanAccessData,
+                safLimitationMessage = SafCapabilityChecker.limitationMessage()
             )
         }
     }
@@ -64,6 +70,8 @@ class ScanViewModel @Inject constructor(
     }
 
     fun toggleMode() {
+        // Cannot enable SAF on Android 11+ because Android/data/ is hidden
+        if (!uiState.value.safCanAccessAndroidData && !uiState.value.useSaf) return
         _uiState.update { it.copy(useSaf = !it.useSaf) }
     }
 

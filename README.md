@@ -30,6 +30,7 @@
 | 🎬 **视频播放** | ExoPlayer（AndroidX Media3）内置播放器，支持手势亮度/音量、双击快进快退、倍速、锁定 |
 | 📼 **导出管理** | 独立的"已转换"页面，查看所有 MP4，一键播放或删除 |
 | 📱 **Shizuku 集成** | 无需 Root，通过 Shizuku 访问 Android 11+ 受保护的 `/Android/data/` 目录 |
+| 📁 **SAF 选择器** | 在 Android 10 及以下可选择 B 站缓存目录（Android 11+ 系统隐藏了 Android/data/） |
 | 🎨 **赛博朋克 UI** | 深色主题 + 霓虹粉/金/紫配色，Material 3 设计 |
 
 ### 它能做什么
@@ -53,7 +54,7 @@ B 站将缓存视频拆分为视频流（`video.m4s`）和音频流（`audio.m4s
 | **B 站 App** | 已安装并有缓存视频 |
 | **存储空间** | ~200MB（App + 缓存 + 转换输出） |
 
-> ⚠️ Android 11+ 必须安装 Shizuku 才能读取 B 站的 `/Android/data/` 缓存目录。
+> ⚠️ Android 11+ 必须安装 Shizuku 才能读取 B 站的 `/Android/data/` 缓存目录。SAF 系统文件选择器在 Android 11+ 不能访问该目录（Google 平台限制）。
 
 ---
 
