@@ -1,5 +1,6 @@
 ﻿package com.example.sillybilibili.ui.pages.home
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,9 +10,12 @@ import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.SettingsService
 import com.example.sillybilibili.service.VideoConverterService
+import com.example.sillybilibili.util.ThumbnailHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 data class VideoDetailUiState(
@@ -25,8 +29,10 @@ data class VideoDetailUiState(
 @HiltViewModel
 class VideoDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context,
     private val videoRepository: VideoRepository,
     private val videoConverterService: VideoConverterService,
+    private val thumbnailHelper: ThumbnailHelper,
     private val settingsService: SettingsService
 ) : ViewModel() {
 
@@ -67,7 +73,14 @@ class VideoDetailViewModel @Inject constructor(
                     )
                 }
                 if (progress.status == ConversionStatus.COMPLETED && progress.outputPath != null) {
-                    videoRepository.updateVideo(video.copy(exportedPath = progress.outputPath))
+                    var updated = video.copy(exportedPath = progress.outputPath)
+                    if (video.coverPath == null) {
+                        val coverFile = File(context.cacheDir, "covers/${video.id}_converted.jpg")
+                        if (thumbnailHelper.extractFrame(progress.outputPath, coverFile)) {
+                            updated = updated.copy(coverPath = coverFile.absolutePath)
+                        }
+                    }
+                    videoRepository.updateVideo(updated)
                     loadVideo()
                 }
             }

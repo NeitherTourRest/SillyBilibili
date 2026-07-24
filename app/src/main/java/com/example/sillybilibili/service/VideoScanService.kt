@@ -19,6 +19,7 @@ import android.os.Environment
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.util.SafFileHelper
 import com.example.sillybilibili.util.ShizukuFileHelper
+import com.example.sillybilibili.util.ThumbnailHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,7 @@ class VideoScanService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shizukuHelper: ShizukuFileHelper,
     private val safHelper: SafFileHelper,
+    private val thumbnailHelper: ThumbnailHelper,
     private val videoRepository: VideoRepository
 ) {
     companion object {
@@ -344,7 +346,9 @@ class VideoScanService @Inject constructor(
                 if (!cacheFile.exists()) cacheFile.writeBytes(bytes)
                 cacheFile.absolutePath
             } else null
-        } else null
+        } else {
+            extractFallbackCoverSaf(typeTagUri, avidName, cidDirName)
+        }
 
         return ScannedVideo(
             avid = avidName.toLongOrNull() ?: 0L, cid = cid, title = title, ownerName = ownerName,
@@ -501,10 +505,13 @@ class VideoScanService @Inject constructor(
             entryJson.optLong("total_bytes", 0L)
         }
 
-        // Copy cover
+        // Copy cover, or extract a preview frame if no cover exists
         val coverOriginalPath = "$cidPath/cover.jpg"
         val coverExists = if (useShizuku) shizukuHelper.fileExists(coverOriginalPath, true) else File(coverOriginalPath).exists()
-        val coverCachePath = if (coverExists) copyCoverToCache(coverOriginalPath, avidName, cidDirName, useShizuku) else null
+        val coverCachePath = when {
+            coverExists -> copyCoverToCache(coverOriginalPath, avidName, cidDirName, useShizuku)
+            else -> extractFallbackCover(videoFilePath, avidName, cidDirName)
+        }
 
         return ScannedVideo(
             avid = avidName.toLongOrNull() ?: 0L, cid = cid, title = title, ownerName = ownerName,
@@ -534,6 +541,23 @@ class VideoScanService @Inject constructor(
             }
             return null
         } catch (_: Exception) { return null }
+    }
+
+    // 没有 cover.jpg 时，从视频流抽一帧作为封面
+    private fun extractFallbackCover(videoPath: String, avid: String, cid: String): String? {
+        val cacheDir = File(context.cacheDir, "covers")
+        if (!cacheDir.exists()) cacheDir.mkdirs()
+        val cacheFile = File(cacheDir, "${avid}_${cid}.jpg")
+        return if (thumbnailHelper.extractFrame(videoPath, cacheFile)) cacheFile.absolutePath else null
+    }
+
+    // SAF 模式下抽取封面（typeTagUri 是目录 URI，需要构造 video.m4s URI）
+    private fun extractFallbackCoverSaf(typeTagUri: Uri, avid: String, cid: String): String? {
+        val videoUri = thumbnailHelper.resolveChildUri(typeTagUri, "video.m4s") ?: return null
+        val cacheDir = File(context.cacheDir, "covers")
+        if (!cacheDir.exists()) cacheDir.mkdirs()
+        val cacheFile = File(cacheDir, "${avid}_${cid}.jpg")
+        return if (thumbnailHelper.extractFrame(videoUri, cacheFile)) cacheFile.absolutePath else null
     }
 
     // 替换文件名中的非法字符（\/:*?"<>|）为下划线

@@ -8,6 +8,7 @@ import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.util.SafFileHelper
 import com.example.sillybilibili.util.ShizukuFileHelper
+import com.example.sillybilibili.util.ThumbnailHelper
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
@@ -30,6 +31,7 @@ class VideoScanServiceTest {
     private lateinit var context: Context
     private lateinit var shizukuHelper: ShizukuFileHelper
     private lateinit var safHelper: SafFileHelper
+    private lateinit var thumbnailHelper: ThumbnailHelper
     private lateinit var videoRepository: VideoRepository
     private lateinit var service: VideoScanService
 
@@ -40,7 +42,12 @@ class VideoScanServiceTest {
         context = mockk(relaxed = true)
         shizukuHelper = mockk()
         safHelper = mockk()
+        thumbnailHelper = mockk()
         videoRepository = mockk(relaxed = true)
+
+        every { thumbnailHelper.extractFrame(any<String>(), any(), any()) } returns false
+        every { thumbnailHelper.extractFrame(any<Uri>(), any(), any()) } returns false
+        every { thumbnailHelper.resolveChildUri(any(), any()) } returns null
 
         val prefs = mockk<SharedPreferences>(relaxed = true)
         val editor = mockk<SharedPreferences.Editor>(relaxed = true)
@@ -50,7 +57,7 @@ class VideoScanServiceTest {
         every { context.contentResolver } returns mockk<ContentResolver>(relaxed = true)
         every { context.cacheDir } returns createTempDir("cache")
 
-        service = VideoScanService(context, shizukuHelper, safHelper, videoRepository)
+        service = VideoScanService(context, shizukuHelper, safHelper, thumbnailHelper, videoRepository)
     }
 
     @After
