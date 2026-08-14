@@ -67,7 +67,6 @@ import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
-import com.example.sillybilibili.ui.components.FastScrollBar
 import com.example.sillybilibili.ui.components.SearchBar
 import com.example.sillybilibili.ui.components.VideoCard
 import com.example.sillybilibili.ui.components.VideoContextMenu
@@ -106,9 +105,19 @@ fun HomePage(
     val scanUiState by scanViewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshVideos() }
-    LaunchedEffect(listState, uiState.videos.size, uiState.hasMoreData) {
+    LaunchedEffect(uiState.currentPage) {
+        // A page owns only 40 cards. Resetting here prevents Compose from retaining the
+        // former page's tail position and immediately advancing again.
+        listState.scrollToItem(0)
+    }
+    LaunchedEffect(listState, uiState.currentPage, uiState.videos.size, uiState.hasMoreData) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { lastIndex ->
-            if (shouldPrefetchHomePage(lastIndex, uiState.videos.size, uiState.hasMoreData)) viewModel.loadMore()
+            if (shouldPrefetchHomePage(lastIndex, uiState.videos.size, uiState.hasMoreData)) {
+                viewModel.prefetchNextPage()
+            }
+            if (shouldAdvanceHomePage(lastIndex, uiState.videos.size, uiState.hasMoreData)) {
+                viewModel.loadMore()
+            }
         }
     }
     LaunchedEffect(uiState.errorMessage) {
@@ -192,21 +201,21 @@ fun HomePage(
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (uiState.videos.isEmpty()) "视频库" else if (uiState.hasMoreData) "已加载 ${uiState.videos.size}+ 个视频" else "${uiState.videos.size} 个视频",
+                        if (uiState.videos.isEmpty()) "视频库" else "第 ${uiState.currentPage + 1} 页 · ${uiState.videos.size} 个视频",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     if (uiState.filterState.isActive) {
                         Text("已启用筛选", style = MaterialTheme.typography.labelMedium, color = CyberVermilion)
-                    } else if (uiState.videos.size >= HomeUiState.PAGE_SIZE) {
+                    } else if (uiState.hasMoreData) {
                         Surface(shape = RoundedCornerShape(12.dp), color = DarkSurfaceVariant) {
-                            Text("右侧滑条可快速定位", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
+                            Text("下滑自动进入下一页", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
                         }
                     }
                 }
                 if (uiState.videos.isNotEmpty()) {
                     Text(
-                        "正在查看第 $firstVisible–$lastVisible 条 · ${if (uiState.hasMoreData) "继续下滑自动加载" else "已加载全部结果"}",
+                        "本页第 $firstVisible–$lastVisible 条 · ${if (uiState.hasMoreData) "下一页已预载" else "已到最后一页"}",
                         style = MaterialTheme.typography.labelSmall,
                         color = DarkTextTertiary
                     )
@@ -226,13 +235,8 @@ fun HomePage(
                         items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
                             VideoCard(video, onClick = { onNavigateToPlayer(video, uiState.videos) }, onLongClick = { contextMenuVideo = video }, onCoverRequested = viewModel::requestCover, onOnlineStatusRequested = viewModel::requestOnlineStatus)
                         }
-                        if (uiState.isLoadingMore) item(key = "home-loading-more", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
+                        if (uiState.isLoadingMore) item(key = "home-switching-page", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
-                    FastScrollBar(
-                        listState = listState,
-                        itemCount = uiState.videos.size,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(vertical = 8.dp)
-                    )
                 }
             }
         }

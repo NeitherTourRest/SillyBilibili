@@ -17,6 +17,7 @@ import javax.inject.Inject
 
 private const val SEARCH_DEBOUNCE_MS = 300L
 internal const val HOME_PREFETCH_DISTANCE = 12
+private const val HOME_PAGE_SWITCH_DISTANCE = 2
 
 enum class Orientation { LANDSCAPE, PORTRAIT }
 
@@ -49,7 +50,7 @@ data class HomeUiState(
     val isLoading: Boolean = false, val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
     val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null
-) { companion object { const val PAGE_SIZE = 48 } }
+) { companion object { const val PAGE_SIZE = 40 } }
 
 /** Starts the next database page early enough that long lists do not visibly pause at the end. */
 internal fun shouldPrefetchHomePage(
@@ -58,6 +59,14 @@ internal fun shouldPrefetchHomePage(
     hasMoreData: Boolean
 ): Boolean = hasMoreData && lastVisibleIndex != null && loadedItemCount > 0 &&
     lastVisibleIndex >= loadedItemCount - HOME_PREFETCH_DISTANCE
+
+/** A page change happens only at the tail, after the following page has been warmed up. */
+internal fun shouldAdvanceHomePage(
+    lastVisibleIndex: Int?,
+    loadedItemCount: Int,
+    hasMoreData: Boolean
+): Boolean = hasMoreData && lastVisibleIndex != null && loadedItemCount > 0 &&
+    lastVisibleIndex >= loadedItemCount - HOME_PAGE_SWITCH_DISTANCE
 
 internal data class FilterSnapshot(
     val filter: FilterState,
@@ -72,6 +81,12 @@ private data class LoadKey(
     val filter: FilterState,
     /** Forces a new database query after a mutation even when filters are unchanged. */
     val refreshVersion: Long
+)
+
+private data class PrefetchedHomePage(
+    val epoch: Long,
+    val page: Int,
+    val videos: List<Video>
 )
 
 @HiltViewModel
@@ -92,6 +107,9 @@ class HomeViewModel @Inject constructor(
     private val _refreshTrigger = MutableStateFlow(0L)
     private val _categoryRefreshTrigger = MutableStateFlow(0L)
     private val _filterSnapshot = MutableStateFlow(FilterSnapshot(FilterState(), "", 0L))
+    /** Invalidates preloaded pages after search, filter, category or database changes. */
+    private var pagingEpoch = 0L
+    private var prefetchedPage: PrefetchedHomePage? = null
 
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
@@ -146,19 +164,26 @@ class HomeViewModel @Inject constructor(
             }
                 .distinctUntilChanged { (old, _), (new, _) -> old == new }
                 .collectLatest { (key, fs) ->
+                    val epoch = ++pagingEpoch
+                    prefetchedPage = null
+                    _uiState.update { it.copy(isLoading = true, isLoadingMore = false) }
                     val videos = loadPage(
-                        categoryId = _selectedCategoryId.value,
+                        categoryId = key.categoryId,
                         query = key.query, fs = fs, page = 0
                     )
+                    if (epoch != pagingEpoch) return@collectLatest
                     _uiState.update {
                         it.copy(
                             videos = videos,
-                            selectedCategoryId = _selectedCategoryId.value,
+                            selectedCategoryId = key.categoryId,
                             filterState = fs.filter,
                             currentPage = 0,
                             isLoading = false,
                             hasMoreData = videos.size == HomeUiState.PAGE_SIZE
                         )
+                    }
+                    if (videos.size == HomeUiState.PAGE_SIZE) {
+                        prefetchPage(page = 1, epoch = epoch, key = key, fs = fs)
                     }
                 }
         }
@@ -188,20 +213,45 @@ class HomeViewModel @Inject constructor(
 
     // ── Pagination ────────────────────────────────────────────
 
+    /** Preloads the following database page without creating more Compose card nodes. */
+    fun prefetchNextPage() {
+        val state = _uiState.value
+        if (!state.hasMoreData || state.isLoading || state.isLoadingMore) return
+        val page = state.currentPage + 1
+        val cache = prefetchedPage
+        if (cache?.epoch == pagingEpoch && cache.page == page) return
+        prefetchPage(
+            page = page,
+            epoch = pagingEpoch,
+            key = currentLoadKey(),
+            fs = _filterSnapshot.value
+        )
+    }
+
+    /** Replaces the visible page instead of appending indefinitely, keeping scrolling fast. */
     fun loadMore() {
         val state = _uiState.value
-        if (state.isLoadingMore || !state.hasMoreData) return
+        if (state.isLoadingMore || state.isLoading || !state.hasMoreData) return
+        val page = state.currentPage + 1
+        val epoch = pagingEpoch
+        val key = currentLoadKey()
+        val fs = _filterSnapshot.value
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true) }
-            val nextPage = state.currentPage + 1
-            val fs = _filterSnapshot.value
-            val more = loadPage(
-                categoryId = _selectedCategoryId.value,
-                query = state.searchQuery, fs = fs, page = nextPage
-            )
+            val cached = prefetchedPage?.takeIf { it.epoch == epoch && it.page == page }
+            val videos = cached?.videos ?: loadPage(key.categoryId, key.query, fs, page)
+            if (epoch != pagingEpoch) return@launch
+            prefetchedPage = null
             _uiState.update {
-                it.copy(videos = it.videos + more, currentPage = nextPage,
-                    isLoadingMore = false, hasMoreData = more.size == HomeUiState.PAGE_SIZE)
+                it.copy(
+                    videos = videos,
+                    currentPage = page,
+                    isLoadingMore = false,
+                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE
+                )
+            }
+            if (videos.size == HomeUiState.PAGE_SIZE) {
+                prefetchPage(page + 1, epoch, key, fs)
             }
         }
     }
@@ -209,15 +259,21 @@ class HomeViewModel @Inject constructor(
     fun goToPage(page: Int) {
         if (page < 0) return
         viewModelScope.launch {
+            val epoch = ++pagingEpoch
+            prefetchedPage = null
             _uiState.update { it.copy(isLoading = true) }
             val fs = _filterSnapshot.value
             val videos = loadPage(
                 categoryId = _selectedCategoryId.value,
                 query = _searchQuery.value, fs = fs, page = page
             )
+            if (epoch != pagingEpoch) return@launch
             _uiState.update {
                 it.copy(videos = videos, currentPage = page, isLoading = false,
                     hasMoreData = videos.size == HomeUiState.PAGE_SIZE)
+            }
+            if (videos.size == HomeUiState.PAGE_SIZE) {
+                prefetchPage(page + 1, epoch, currentLoadKey(), fs)
             }
         }
     }
@@ -284,4 +340,19 @@ class HomeViewModel @Inject constructor(
 
     fun clearError() { _uiState.update { it.copy(errorMessage = null) } }
     suspend fun getDefaultScanPath(): String? = videoScanService.getDefaultBilibiliPath()
+
+    private fun currentLoadKey(): LoadKey = LoadKey(
+        categoryId = _selectedCategoryId.value,
+        query = _searchQuery.value,
+        filter = _filterSnapshot.value.filter,
+        refreshVersion = _refreshTrigger.value
+    )
+
+    private fun prefetchPage(page: Int, epoch: Long, key: LoadKey, fs: FilterSnapshot) {
+        if (prefetchedPage?.let { it.epoch == epoch && it.page == page } == true) return
+        viewModelScope.launch {
+            val videos = loadPage(key.categoryId, key.query, fs, page)
+            if (epoch == pagingEpoch) prefetchedPage = PrefetchedHomePage(epoch, page, videos)
+        }
+    }
 }

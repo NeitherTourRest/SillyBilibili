@@ -19,4 +19,15 @@ class HomePrefetchTest {
     fun `completed library never requests a further batch`() {
         assertFalse(shouldPrefetchHomePage(lastVisibleIndex = 47, loadedItemCount = 48, hasMoreData = false))
     }
+
+    @Test
+    fun `page only switches when the user reaches the final cards`() {
+        assertFalse(shouldAdvanceHomePage(lastVisibleIndex = 37, loadedItemCount = 40, hasMoreData = true))
+        assertTrue(shouldAdvanceHomePage(lastVisibleIndex = 38, loadedItemCount = 40, hasMoreData = true))
+    }
+
+    @Test
+    fun `page never switches when there is no following page`() {
+        assertFalse(shouldAdvanceHomePage(lastVisibleIndex = 39, loadedItemCount = 40, hasMoreData = false))
+    }
 }

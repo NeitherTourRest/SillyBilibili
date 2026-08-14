@@ -115,6 +115,26 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `loadMore replaces the current page instead of growing the visible list`() = runTest {
+        val firstPage = List(HomeUiState.PAGE_SIZE) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "P0-$index", path = "/v/$index", audioPath = "/a/$index", size = 1, duration = 1)
+        }
+        val secondPage = listOf(
+            Video(id = 100L, avid = 100L, cid = 1, title = "P1", path = "/v/100", audioPath = "/a/100", size = 1, duration = 1)
+        )
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(0), any()) } returns firstPage
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(1), any()) } returns secondPage
+
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(secondPage, viewModel.uiState.value.videos)
+        assertEquals(1, viewModel.uiState.value.currentPage)
+        assertEquals(secondPage.size, viewModel.uiState.value.videos.size)
+    }
+
+    @Test
     fun `goToPage requests target page from repository`() = runTest {
         val page2 = listOf(Video(avid = 3, cid = 4, title = "T", path = "/v", audioPath = "/a", size = 1, duration = 1))
         coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(2), any()) } returns page2
