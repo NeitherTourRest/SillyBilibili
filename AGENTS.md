@@ -156,7 +156,7 @@ Room → SQLite
 ## 版本控制与文档
 
 - 每次影响用户功能、交互、权限、构建或使用步骤的改动，都必须在同一提交中更新 `README.md`。
-- 完成测试与 release APK 构建后，使用清晰的 Conventional Commit 信息提交，并推送到 `origin/master`。
+- 默认开发分支为 `dev`。完成测试与 release APK 构建后，使用清晰的 Conventional Commit 信息提交，并推送到 `origin/dev`。
 - 严禁提交 APK、keystore、`keystore.properties`、密码、令牌、真实缓存媒体或其他私密数据。
 - release 签名信息只从本机忽略的 `keystore.properties` 读取；参照 `keystore.properties.example` 配置。
 
