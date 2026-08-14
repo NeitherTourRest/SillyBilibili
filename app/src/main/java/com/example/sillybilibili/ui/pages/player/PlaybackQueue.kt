@@ -25,6 +25,24 @@ data class PlaybackQueue(
 )
 
 /**
+ * Keeps the short-video gesture responsive without creating a second player: the next and
+ * previous two entries are warmed in nearest-first order by the playback read-ahead layer.
+ */
+internal fun adjacentPlaybackPreloadItems(
+    items: List<PlaybackQueueItem>,
+    activeIndex: Int,
+    neighbourCount: Int = 2
+): List<PlaybackQueueItem> {
+    if (activeIndex !in items.indices || neighbourCount <= 0) return emptyList()
+    return buildList {
+        for (distance in 1..neighbourCount) {
+            items.getOrNull(activeIndex + distance)?.let(::add)
+            items.getOrNull(activeIndex - distance)?.let(::add)
+        }
+    }
+}
+
+/**
  * Navigation arguments are intentionally kept small. The media session owns the real queue after
  * playback starts; this store is only needed while navigating from a result list to the player.
  */

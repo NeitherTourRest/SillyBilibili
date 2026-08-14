@@ -13,7 +13,8 @@ import kotlin.math.min
 /** A seekable Media3 data source backed by bounded Shizuku Binder reads. */
 @UnstableApi
 class ShizukuDataSource(
-    private val shizukuHelper: ShizukuFileHelper
+    private val shizukuHelper: ShizukuFileHelper,
+    private val readAheadCache: ShizukuReadAheadCache
 ) : BaseDataSource(false) {
     private var openedUri: Uri? = null
     private var sourcePath = ""
@@ -24,7 +25,10 @@ class ShizukuDataSource(
         transferInitializing(dataSpec)
         val path = dataSpec.uri.path?.takeIf { it.isNotBlank() }
             ?: throw IOException("Invalid Shizuku media URI")
-        val fileLength = shizukuHelper.fileLength(path, useShizuku = true)
+        val fileLength = readAheadCache.fileLength(path)
+            ?: shizukuHelper.fileLength(path, useShizuku = true).also {
+                readAheadCache.storeFileLength(path, it)
+            }
         if (fileLength <= dataSpec.position) throw IOException("Media file is unavailable")
         sourcePath = path
         openedUri = dataSpec.uri
@@ -42,7 +46,9 @@ class ShizukuDataSource(
         if (length == 0) return 0
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
         val requestSize = min(min(length.toLong(), bytesRemaining), MAX_RANGE_BYTES.toLong()).toInt()
-        val chunk = shizukuHelper.readFileRange(sourcePath, readPosition, requestSize, useShizuku = true)
+        val chunk = readAheadCache.read(sourcePath, readPosition, requestSize) { offsetToRead, bytesToRead ->
+            shizukuHelper.readFileRange(sourcePath, offsetToRead, bytesToRead, useShizuku = true)
+        }
             ?: throw IOException("Unable to read isolated media file")
         if (chunk.isEmpty()) return C.RESULT_END_OF_INPUT
         val copied = min(chunk.size, requestSize)
@@ -63,8 +69,11 @@ class ShizukuDataSource(
         bytesRemaining = 0L
     }
 
-    class Factory(private val shizukuHelper: ShizukuFileHelper) : DataSource.Factory {
-        override fun createDataSource(): DataSource = ShizukuDataSource(shizukuHelper)
+    class Factory(
+        private val shizukuHelper: ShizukuFileHelper,
+        private val readAheadCache: ShizukuReadAheadCache
+    ) : DataSource.Factory {
+        override fun createDataSource(): DataSource = ShizukuDataSource(shizukuHelper, readAheadCache)
     }
 
     private companion object {

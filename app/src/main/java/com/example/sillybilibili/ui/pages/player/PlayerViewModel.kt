@@ -8,6 +8,7 @@ import com.example.sillybilibili.domain.model.ConversionStatus
 import com.example.sillybilibili.service.ConversionForegroundService
 import com.example.sillybilibili.service.ConversionJobRegistry
 import com.example.sillybilibili.service.PlaybackMediaResolver
+import com.example.sillybilibili.service.PlaybackReadAheadPreloader
 import com.example.sillybilibili.service.PreparedPlaybackItem
 import com.example.sillybilibili.service.SettingsService
 import com.example.sillybilibili.service.OnlineVideoStatusService
@@ -35,6 +36,7 @@ data class PlayerPreparationState(
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val playbackMediaResolver: PlaybackMediaResolver,
+    private val playbackReadAheadPreloader: PlaybackReadAheadPreloader,
     private val settingsService: SettingsService,
     private val onlineVideoStatusService: OnlineVideoStatusService,
     private val videoConverterService: VideoConverterService,
@@ -49,6 +51,7 @@ class PlayerViewModel @Inject constructor(
     val conversionProgress: StateFlow<ConversionProgress?> = _conversionProgress.asStateFlow()
     private var queue: PlaybackQueue? = null
     private var conversionObservation: Job? = null
+    private var readAheadJob: Job? = null
 
     fun prepare(playbackQueue: PlaybackQueue) {
         queue = playbackQueue
@@ -56,6 +59,16 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun useTemporaryCopyFallback() = resolve(forceTemporaryCopies = true)
+
+    /** Warms nearby isolated-cache media without creating another decoder or audio session. */
+    fun preloadAdjacent(activeIndex: Int) {
+        val adjacentItems = adjacentPlaybackPreloadItems(queue?.items.orEmpty(), activeIndex)
+        readAheadJob?.cancel()
+        if (adjacentItems.isEmpty()) return
+        readAheadJob = viewModelScope.launch {
+            playbackReadAheadPreloader.preload(adjacentItems)
+        }
+    }
 
     fun shouldKeepPlayingAfterLeaving(): Boolean = settingsService.backgroundPlaybackEnabled
 

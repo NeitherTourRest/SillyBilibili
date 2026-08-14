@@ -27,7 +27,8 @@ object CachePlaybackMetadata {
 @UnstableApi
 class CacheMediaSourceFactory(
     context: Context,
-    private val shizukuHelper: ShizukuFileHelper
+    private val shizukuHelper: ShizukuFileHelper,
+    private val readAheadCache: ShizukuReadAheadCache
 ) : MediaSource.Factory {
     private val defaultFactory = DefaultMediaSourceFactory(context)
 
@@ -42,7 +43,7 @@ class CacheMediaSourceFactory(
 
     private fun createSingleSource(mediaItem: MediaItem): MediaSource {
         return if (mediaItem.localConfiguration?.uri?.scheme == "shizuku") {
-            ProgressiveMediaSource.Factory(ShizukuDataSource.Factory(shizukuHelper))
+            ProgressiveMediaSource.Factory(ShizukuDataSource.Factory(shizukuHelper, readAheadCache))
                 .createMediaSource(mediaItem)
         } else {
             defaultFactory.createMediaSource(mediaItem)

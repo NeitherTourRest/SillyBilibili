@@ -179,6 +179,10 @@ fun PlayerPage(
         }
     }
 
+    LaunchedEffect(queueId, preparation.items, activeIndex) {
+        if (preparation.items.isNotEmpty()) viewModel.preloadAdjacent(activeIndex)
+    }
+
     LaunchedEffect(controller, preparation.items) {
         val activeController = controller ?: return@LaunchedEffect
         val currentQueue = queue
@@ -300,6 +304,7 @@ fun PlayerPage(
 
     fun switchToQueueIndex(index: Int) {
         activeIndex = index
+        viewModel.preloadAdjacent(index)
         controller?.seekToDefaultPosition(index)
         controller?.play()
     }
@@ -328,13 +333,19 @@ fun PlayerPage(
             } else {
                 fullscreenViewportHeightPx.toFloat()
             }
+            // Start opening the selected source while the outgoing page is still animating.
+            // The previous video remains fully interactive during a held drag; this only happens
+            // after the user has released beyond the switch threshold.
+            viewModel.preloadAdjacent(targetIndex)
+            controller?.seekToDefaultPosition(targetIndex)
+            controller?.play()
             animate(
                 initialValue = fullscreenSwipeOffsetPx,
                 targetValue = outgoingOffset,
                 animationSpec = tween(durationMillis = 150)
             ) { value, _ -> fullscreenSwipeOffsetPx = value }
 
-            switchToQueueIndex(targetIndex)
+            activeIndex = targetIndex
             fullscreenSwipeOffsetPx = -outgoingOffset
             animate(
                 initialValue = fullscreenSwipeOffsetPx,

@@ -22,6 +22,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
     @Inject lateinit var shizukuHelper: ShizukuFileHelper
+    @Inject lateinit var readAheadCache: ShizukuReadAheadCache
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -37,7 +38,7 @@ class PlaybackService : MediaSessionService() {
             .setBufferDurationsMs(10_000, 30_000, 1_500, 2_000)
             .build()
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(CacheMediaSourceFactory(this, shizukuHelper))
+            .setMediaSourceFactory(CacheMediaSourceFactory(this, shizukuHelper, readAheadCache))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setSeekBackIncrementMs(10_000)
