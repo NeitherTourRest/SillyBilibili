@@ -1,3 +1,34 @@
 <resources>
     <string name="app_name">Silly Bilibili</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_subtitle">管理默认导出位置与应用偏好</string>
+    <string name="language">语言</string>
+    <string name="language_description">选择应用界面显示语言，切换后立即生效。</string>
+    <string name="language_simplified_chinese">简体中文</string>
+    <string name="language_english">English</string>
+    <string name="mp4_export_location">MP4 导出位置</string>
+    <string name="mp4_export_description">转换后的视频将保存至此文件夹。</string>
+    <string name="background_playback">后台播放</string>
+    <string name="background_playback_description">离开播放页后继续播放，并显示返回入口。</string>
+    <string name="online_status_refresh">线上状态核验</string>
+    <string name="online_status_refresh_description">立即重新查询所有已扫描缓存的视频状态；同一稿件的多个分 P 只会请求一次。</string>
+    <string name="online_status_refresh_action">刷新全部状态</string>
+    <string name="online_status_refreshing">正在刷新…</string>
+    <string name="online_status_refresh_result">已核验 %1$d 个缓存（%2$d 次请求）：在线 %3$d，已下架/不可访问 %4$d，暂无法核验 %5$d。</string>
+    <string name="back">返回</string>
+    <string name="home_subtitle">本地缓存视频库</string>
+    <string name="scan_videos">扫描视频</string>
+    <string name="more">更多</string>
+    <string name="exported_videos">已导出视频</string>
+    <string name="category_management">分类管理</string>
+    <string name="user_guide">使用指南</string>
+    <string name="scan_title">扫描缓存</string>
+    <string name="scan_subtitle">发现、筛选并更新本地视频库</string>
+    <string name="categories_title">分类管理</string>
+    <string name="categories_subtitle">整理你的视频收藏</string>
+    <string name="exported_title">已导出视频</string>
+    <string name="exported_subtitle">转换完成的 MP4 文件</string>
+    <string name="guide_title">使用指南</string>
+    <string name="guide_subtitle">权限与 Shizuku 配置</string>
+    <string name="category_videos_subtitle">按分类浏览视频</string>
 </resources>

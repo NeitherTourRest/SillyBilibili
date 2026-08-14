@@ -2,6 +2,10 @@ package com.example.sillybilibili.ui.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -11,9 +15,11 @@ import com.example.sillybilibili.ui.pages.categories.CategoriesPage
 import com.example.sillybilibili.ui.pages.guide.GuidePage
 import com.example.sillybilibili.ui.pages.exported.ExportedPage
 import com.example.sillybilibili.ui.pages.home.HomePage
-import com.example.sillybilibili.ui.pages.home.VideoDetailPage
 import com.example.sillybilibili.ui.pages.home.VideoListPage
 import com.example.sillybilibili.ui.pages.player.PlayerPage
+import com.example.sillybilibili.ui.pages.player.PlaybackQueueItem
+import com.example.sillybilibili.ui.pages.player.PlaybackQueueStore
+import com.example.sillybilibili.ui.pages.player.BackgroundPlaybackEntry
 import com.example.sillybilibili.ui.pages.scan.ScanPage
 import com.example.sillybilibili.ui.pages.settings.SettingsPage
 
@@ -26,17 +32,16 @@ sealed class Screen(val route: String) {
     object VideoList : Screen("videolist/{categoryId}") {
         fun createRoute(categoryId: Long?) = "videolist/${categoryId ?: -1}"
     }
-    object VideoDetail : Screen("videodetail/{videoId}") {
-        fun createRoute(videoId: Long) = "videodetail/$videoId"
-    }
-    object Player : Screen("player/{filePath}/{title}") {
-        fun createRoute(filePath: String, title: String) = "player/${Uri.encode(filePath)}/${Uri.encode(title)}"
+    object Player : Screen("player/{queueId}/{startIndex}") {
+        fun createRoute(queueId: String, startIndex: Int) = "player/${Uri.encode(queueId)}/$startIndex"
     }
     object Exported : Screen("exported")
 }
 
 @Composable
 fun AppNavHost(navController: NavHostController) {
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
     NavHost(navController = navController, startDestination = Screen.Home.route) {
 
         composable(Screen.Home.route) {
@@ -46,7 +51,13 @@ fun AppNavHost(navController: NavHostController) {
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToGuide = { navController.navigate(Screen.Guide.route) },
                 onNavigateToScan = { navController.navigate(Screen.Scan.route) },
-                onNavigateToVideoDetail = { videoId -> navController.navigate(Screen.VideoDetail.createRoute(videoId)) },
+                onNavigateToPlayer = { video, videos ->
+                    val queue = PlaybackQueueStore.replace(
+                        videos.map { PlaybackQueueItem(it.id, it.title, it.path, it.audioPath, it.displayCoverPath) },
+                        video.id
+                    )
+                    navController.navigate(Screen.Player.createRoute(queue.id, queue.selectedIndex))
+                },
                 onNavigateToExported = { navController.navigate(Screen.Exported.route) }
             )
         }
@@ -84,27 +95,23 @@ fun AppNavHost(navController: NavHostController) {
             VideoListPage(
                 categoryId = if (id == -1L) null else id,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToVideoDetail = { videoId -> navController.navigate(Screen.VideoDetail.createRoute(videoId)) }
-            )
-        }
-
-        composable(route = Screen.VideoDetail.route, arguments = listOf(navArgument("videoId") { type = NavType.LongType })) { entry ->
-            VideoDetailPage(
-                videoId = entry.arguments?.getLong("videoId") ?: 0L,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToPlayer = { path, title -> navController.navigate(Screen.Player.createRoute(path, title)) }
+                onNavigateToPlayer = { video, videos ->
+                    val queue = PlaybackQueueStore.replace(
+                        videos.map { PlaybackQueueItem(it.id, it.title, it.path, it.audioPath, it.displayCoverPath) },
+                        video.id
+                    )
+                    navController.navigate(Screen.Player.createRoute(queue.id, queue.selectedIndex))
+                }
             )
         }
 
         composable(route = Screen.Player.route, arguments = listOf(
-            navArgument("filePath") { type = NavType.StringType },
-            navArgument("title") { type = NavType.StringType }
+            navArgument("queueId") { type = NavType.StringType },
+            navArgument("startIndex") { type = NavType.IntType }
         )) { entry ->
-            val filePath = Uri.decode(entry.arguments?.getString("filePath") ?: "")
-            val title = Uri.decode(entry.arguments?.getString("title") ?: "")
             PlayerPage(
-                filePath = filePath,
-                videoTitle = title,
+                queueId = Uri.decode(entry.arguments?.getString("queueId") ?: ""),
+                initialIndex = entry.arguments?.getInt("startIndex") ?: 0,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -112,8 +119,21 @@ fun AppNavHost(navController: NavHostController) {
         composable(Screen.Exported.route) {
             ExportedPage(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToPlayer = { path, title -> navController.navigate(Screen.Player.createRoute(path, title)) }
+                onNavigateToPlayer = { path, title ->
+                    val queue = PlaybackQueueStore.prepareSingle(path, title)
+                    navController.navigate(Screen.Player.createRoute(queue.id, queue.selectedIndex))
+                }
             )
         }
+    }
+    BackgroundPlaybackEntry(
+        visible = backStackEntry?.destination?.route != Screen.Player.route,
+        modifier = androidx.compose.ui.Modifier.align(Alignment.BottomCenter),
+        onOpenPlayer = {
+            PlaybackQueueStore.currentQueue()?.let { queue ->
+                navController.navigate(Screen.Player.createRoute(queue.id, queue.selectedIndex)) { launchSingleTop = true }
+            }
+        }
+    )
     }
 }

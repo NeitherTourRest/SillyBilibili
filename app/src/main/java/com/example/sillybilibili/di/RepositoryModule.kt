@@ -3,6 +3,8 @@
 // Repository 接口的实现
 import com.example.sillybilibili.data.repository.CategoryRepositoryImpl
 import com.example.sillybilibili.data.repository.VideoRepositoryImpl
+import com.example.sillybilibili.service.BilibiliOnlineVideoStatusRemoteDataSource
+import com.example.sillybilibili.service.OnlineVideoStatusRemoteDataSource
 // Repository 接口定义（抽象层）
 import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
@@ -27,4 +29,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindVideoRepository(impl: VideoRepositoryImpl): VideoRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindOnlineVideoStatusRemoteDataSource(
+        impl: BilibiliOnlineVideoStatusRemoteDataSource
+    ): OnlineVideoStatusRemoteDataSource
 }

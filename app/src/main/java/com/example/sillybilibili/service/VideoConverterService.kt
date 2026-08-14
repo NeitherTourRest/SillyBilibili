@@ -98,13 +98,14 @@ class VideoConverterService @Inject constructor(
         videoPath: String, audioPath: String, outputDir: String,
         outputFileName: String, videoId: Long = 0
     ): Flow<ConversionProgress> = callbackFlow {
+        trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.PENDING, statusMessage = "正在准备视频文件…"))
         val actualVideoPath = ensureAccessible(videoPath) ?: run {
             val reason = when {
                 !shizukuHelper.isShizukuAvailable() -> "Shizuku not running — open Shizuku app first"
                 !shizukuHelper.fileExists(videoPath, true) -> "Video file missing — may have been deleted by Bilibili"
                 else -> "Cannot access video file — check Shizuku and permissions"
             }
-            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = reason))
+            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = reason, statusMessage = "准备视频文件失败"))
             close(); return@callbackFlow
         }
         val actualAudioPath = ensureAccessible(audioPath) ?: run {
@@ -113,18 +114,18 @@ class VideoConverterService @Inject constructor(
                 !shizukuHelper.fileExists(audioPath, true) -> "Audio file missing"
                 else -> "Cannot access audio file"
             }
-            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = reason))
+            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = reason, statusMessage = "准备音频文件失败"))
             close(); return@callbackFlow
         }
 
         val (outputDirFile, outputError) = ensureOutputWritable(outputDir)
         if (outputError != null) {
-            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = outputError))
+            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = outputError, statusMessage = "输出目录不可用"))
             close(); return@callbackFlow
         }
 
         val outputFile = File(outputDirFile, "$outputFileName.mp4")
-        trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.PENDING))
+        trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.PENDING, statusMessage = "正在读取音视频轨道…"))
 
         var videoExtractor: MediaExtractor? = null
         var audioExtractor: MediaExtractor? = null
@@ -151,7 +152,7 @@ class VideoConverterService @Inject constructor(
             }
 
             if (videoTrackIndex == -1 || audioTrackIndex == -1) {
-                trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = "Could not find video or audio track"))
+                trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = "Could not find video or audio track", statusMessage = "未找到可转换的音视频轨道"))
                 close(); return@callbackFlow
             }
 
@@ -162,6 +163,8 @@ class VideoConverterService @Inject constructor(
             val muxerVideoTrack = muxer.addTrack(videoFormat!!)
             val muxerAudioTrack = muxer.addTrack(audioFormat!!)
             muxer.start()
+
+            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.CONVERTING, statusMessage = "正在合并音视频…"))
 
             val totalDuration = maxOf(videoFormat.getLong(MediaFormat.KEY_DURATION), audioFormat.getLong(MediaFormat.KEY_DURATION))
 
@@ -210,13 +213,19 @@ class VideoConverterService @Inject constructor(
                         (lastWrittenTimeUs.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
                     else
                         ((videoBytes + audioBytes).toFloat() / totalFileSize.toFloat()).coerceIn(0f, 1f)
-                    send(ConversionProgress(videoId, outputFileName, progress, ConversionStatus.CONVERTING))
+                    send(ConversionProgress(
+                        videoId,
+                        outputFileName,
+                        progress,
+                        ConversionStatus.CONVERTING,
+                        statusMessage = "正在写入 MP4：${(progress * 100).toInt()}%"
+                    ))
                 }
             }
 
-            send(ConversionProgress(videoId, outputFileName, 1f, ConversionStatus.COMPLETED, outputPath = outputFile.absolutePath))
+            send(ConversionProgress(videoId, outputFileName, 1f, ConversionStatus.COMPLETED, outputPath = outputFile.absolutePath, statusMessage = "转换完成"))
         } catch (e: Exception) {
-            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = e.message ?: "Unknown error"))
+            trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.FAILED, errorMessage = e.message ?: "Unknown error", statusMessage = "转换失败"))
         } finally {
             try { muxer?.stop() } catch (_: Exception) {}
             try { muxer?.release() } catch (_: Exception) {}

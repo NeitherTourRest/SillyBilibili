@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sillybilibili.ui.theme.*
+import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.util.PermissionHelper
 import rikka.shizuku.Shizuku
 
@@ -42,11 +43,7 @@ fun GuidePage(onNavigateBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("使用指南", fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White.copy(alpha = 0.8f)) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+            AppTopBar(title = "Guide", subtitle = "Permissions and Shizuku setup", onNavigateBack = onNavigateBack)
         },
         containerColor = DarkBackground
     ) { paddingValues ->
@@ -57,7 +54,7 @@ fun GuidePage(onNavigateBack: () -> Unit) {
             // === Step 1: Permissions ===
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkCard),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+                shape = MaterialTheme.shapes.large
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -88,7 +85,7 @@ fun GuidePage(onNavigateBack: () -> Unit) {
             // === Step 2: Shizuku ===
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkCard),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+                shape = MaterialTheme.shapes.large
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -108,7 +105,7 @@ fun GuidePage(onNavigateBack: () -> Unit) {
                             onClick = { try { shizukuChecked = Shizuku.pingBinder() } catch (_: Exception) {} },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = CyberVermilion),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+                            shape = MaterialTheme.shapes.medium
                         ) {
                             Text(if (isShizukuAvailable) "Shizuku 已连接 ✓" else "检查 Shizuku", fontWeight = FontWeight.Bold)
                         }
@@ -129,7 +126,7 @@ fun GuidePage(onNavigateBack: () -> Unit) {
             // === Step 3: Usage tips ===
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkCard),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+                shape = MaterialTheme.shapes.large
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

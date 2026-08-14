@@ -9,13 +9,13 @@ import com.example.sillybilibili.domain.model.ConversionStatus
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.SettingsService
+import com.example.sillybilibili.service.ConversionForegroundService
+import com.example.sillybilibili.service.ConversionJobRegistry
 import com.example.sillybilibili.service.VideoConverterService
-import com.example.sillybilibili.util.ThumbnailHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 data class VideoDetailUiState(
@@ -32,7 +32,7 @@ class VideoDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val videoRepository: VideoRepository,
     private val videoConverterService: VideoConverterService,
-    private val thumbnailHelper: ThumbnailHelper,
+    private val conversionJobRegistry: ConversionJobRegistry,
     private val settingsService: SettingsService
 ) : ViewModel() {
 
@@ -43,6 +43,21 @@ class VideoDetailViewModel @Inject constructor(
 
     init {
         loadVideo()
+        observeConversion()
+    }
+
+    private fun observeConversion() {
+        viewModelScope.launch {
+            conversionJobRegistry.progressFor(videoId).collect { progress ->
+                _uiState.update {
+                    it.copy(
+                        isConverting = progress?.status in setOf(ConversionStatus.PENDING, ConversionStatus.CONVERTING),
+                        conversionProgress = progress
+                    )
+                }
+                if (progress?.status == ConversionStatus.COMPLETED) loadVideo()
+            }
+        }
     }
 
     private fun loadVideo() {
@@ -55,39 +70,49 @@ class VideoDetailViewModel @Inject constructor(
 
     fun convertToMp4(outputDir: String) {
         val video = _uiState.value.video ?: return
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(isConverting = true, conversionProgress = null) }
-
-            videoConverterService.convertToMp4(
-                videoPath = video.path,
-                audioPath = video.audioPath,
-                outputDir = outputDir,
-                outputFileName = video.title,
-                videoId = video.id
-            ).collect { progress ->
-                _uiState.update {
-                    it.copy(
-                        isConverting = progress.status == ConversionStatus.CONVERTING,
-                        conversionProgress = progress
+        if (conversionJobRegistry.isRunning(video.id)) return
+        _uiState.update {
+            it.copy(
+                isConverting = true,
+                conversionProgress = ConversionProgress(
+                    video.id,
+                    video.title,
+                    0f,
+                    ConversionStatus.PENDING,
+                    statusMessage = "正在启动后台转换…"
+                )
+            )
+        }
+        try {
+            ConversionForegroundService.start(
+                context,
+                ConversionForegroundService.ConversionRequest(
+                    videoId = video.id,
+                    videoPath = video.path,
+                    audioPath = video.audioPath,
+                    outputDir = outputDir,
+                    outputFileName = video.title
+                )
+            )
+        } catch (error: Exception) {
+            _uiState.update {
+                it.copy(
+                    isConverting = false,
+                    conversionProgress = ConversionProgress(
+                        video.id,
+                        video.title,
+                        0f,
+                        ConversionStatus.FAILED,
+                        errorMessage = error.message,
+                        statusMessage = "无法启动后台转换"
                     )
-                }
-                if (progress.status == ConversionStatus.COMPLETED && progress.outputPath != null) {
-                    var updated = video.copy(exportedPath = progress.outputPath)
-                    if (video.coverPath == null) {
-                        val coverFile = File(context.cacheDir, "covers/${video.id}_converted.jpg")
-                        if (thumbnailHelper.extractFrame(progress.outputPath, coverFile)) {
-                            updated = updated.copy(coverPath = coverFile.absolutePath)
-                        }
-                    }
-                    videoRepository.updateVideo(updated)
-                    loadVideo()
-                }
+                )
             }
         }
     }
 
     fun clearConversionStatus() {
+        conversionJobRegistry.clear(videoId)
         _uiState.update { it.copy(conversionProgress = null) }
     }
 

@@ -50,6 +50,12 @@ class ShizukuFileHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
+    /** A single entry.json discovered by a batched shell request. */
+    data class EntryJsonFile(val avidName: String, val cidDirName: String, val content: String)
+    data class DirectoryListResult(val directories: List<String>, val completed: Boolean)
+    data class EntryJsonBatchResult(val entries: List<EntryJsonFile>, val completed: Boolean)
+    data class VideoFileInfoBatchResult(val fileInfo: Map<String, Pair<Long, Long>>, val completed: Boolean)
+
     companion object {
         private const val TAG = "ShizukuFileHelper"
         private const val SHIZUKU_PACKAGE_NAME = "moe.shizuku.privileged.api"
@@ -214,25 +220,35 @@ class ShizukuFileHelper @Inject constructor(
 
     // 列出目录下所有子目录名称（不含文件）
     fun listDirectories(path: String, useShizuku: Boolean = true): List<String> {
+        return listDirectoriesResult(path, useShizuku).directories
+    }
+
+    /** Completion marker distinguishes an empty directory from a failed/truncated shell listing. */
+    fun listDirectoriesResult(path: String, useShizuku: Boolean = true): DirectoryListResult {
         if (!useShizuku || !isShizukuAvailable()) {
-            return File(path).listFiles()
-                ?.filter { it.isDirectory }
-                ?.map { it.name }
-                ?: emptyList()
+            val files = File(path).listFiles()
+            return DirectoryListResult(files?.filter { it.isDirectory }?.map { it.name } ?: emptyList(), files != null)
         }
+        // Permission may be granted while the UserService is still binding (or has died).
+        // Do not run this privileged scan through the app's ordinary shell in that state:
+        // a permission-denied empty result would otherwise look like an empty cache.
+        if (shellService == null) return DirectoryListResult(emptyList(), false)
         return try {
-            execSh(
+            val completionMarker = "__SILLY_LIST_COMPLETE__"
+            val output = execSh(
                 "for item in '${escapeSingleQuote(path)}'/*; do " +
-                        "if [ -d \"\$item\" ]; then basename \"\$item\"; fi; done",
+                        "if [ -d \"\$item\" ]; then basename \"\$item\"; fi; done; " +
+                        "printf '$completionMarker'",
                 useShizuku
             )
-                .lines().filter { it.isNotBlank() }
+            val completed = output.contains(completionMarker)
+            DirectoryListResult(
+                output.replace(completionMarker, "").lines().filter { it.isNotBlank() },
+                completed
+            )
         } catch (e: Exception) {
-            Log.w(TAG, "Shizuku listDirs failed, fallback to File API", e)
-            File(path).listFiles()
-                ?.filter { it.isDirectory }
-                ?.map { it.name }
-                ?: emptyList()
+            Log.w(TAG, "Shizuku listDirs failed", e)
+            DirectoryListResult(emptyList(), false)
         }
     }
 
@@ -288,6 +304,99 @@ class ShizukuFileHelper @Inject constructor(
         }
     }
 
+    /**
+     * Reads entry.json for multiple av folders in one shell process.
+     *
+     * A regular scan used to start a shell process once to locate the cid folder and
+     * once more to cat entry.json for every video.  Keeping the payload bounded is
+     * important because the result crosses Binder, so callers should use batches of
+     * a few dozen folders rather than passing the complete library at once.
+     */
+    fun readEntryJsonBatch(
+        basePath: String,
+        avidNames: List<String>,
+        useShizuku: Boolean = true
+    ): List<EntryJsonFile> = readEntryJsonBatchResult(basePath, avidNames, useShizuku).entries
+
+    fun readEntryJsonBatchResult(
+        basePath: String,
+        avidNames: List<String>,
+        useShizuku: Boolean = true
+    ): EntryJsonBatchResult {
+        if (avidNames.isEmpty()) return EntryJsonBatchResult(emptyList(), true)
+
+        if (!useShizuku || !isShizukuAvailable()) {
+            var complete = true
+            val entries = avidNames.mapNotNull { avidName ->
+                val avidDir = File(basePath, avidName)
+                val cidDirectories = avidDir.listFiles()
+                if (cidDirectories == null) complete = false
+                cidDirectories
+                    ?.asSequence()
+                    ?.filter { it.isDirectory && File(it, "entry.json").isFile }
+                    ?.mapNotNull { cidDir ->
+                        val content = try { File(cidDir, "entry.json").readText() } catch (_: Exception) {
+                            complete = false
+                            return@mapNotNull null
+                        }
+                        EntryJsonFile(avidName, cidDir.name, content)
+                    }
+                    ?.toList()
+                    ?: emptyList()
+            }
+                .flatten()
+            return EntryJsonBatchResult(entries, complete)
+        }
+
+        if (shellService == null) return EntryJsonBatchResult(emptyList(), false)
+
+        // av folder names are expected to be numeric, nevertheless quote every value.
+        val avidArguments = avidNames.joinToString(" ") { "'${escapeSingleQuote(it)}'" }
+        val escapedBasePath = escapeSingleQuote(basePath)
+        val completionMarker = "__SILLY_ENTRY_COMPLETE__"
+        val command = "for avid in $avidArguments; do " +
+            "for entry in '$escapedBasePath'/\$avid/*/entry.json; do " +
+            "[ -f \"\$entry\" ] || continue; " +
+            "cid=\$(basename \"\$(dirname \"\$entry\")\"); " +
+            "printf '\\036%s\\037%s\\037' \"\$avid\" \"\$cid\"; " +
+            "cat \"\$entry\"; printf '\\036\\037'; " +
+            "done; done; printf '$completionMarker'"
+
+        return try {
+            val output = execSh(command, useShizuku)
+            val completed = output.contains(completionMarker)
+            EntryJsonBatchResult(parseEntryJsonBatchOutput(output.replace(completionMarker, "")), completed)
+        } catch (e: Exception) {
+            Log.w(TAG, "Shizuku entry batch read failed", e)
+            EntryJsonBatchResult(emptyList(), false)
+        }
+    }
+
+    private fun parseEntryJsonBatchOutput(output: String): List<EntryJsonFile> {
+        val recordStart = '\u001e'
+        val fieldSeparator = '\u001f'
+        val records = mutableListOf<EntryJsonFile>()
+        var cursor = 0
+
+        while (true) {
+            val start = output.indexOf(recordStart, cursor)
+            if (start < 0) break
+            val avidEnd = output.indexOf(fieldSeparator, start + 1)
+            val cidEnd = if (avidEnd >= 0) output.indexOf(fieldSeparator, avidEnd + 1) else -1
+            val endMarker = if (cidEnd >= 0) output.indexOf("$recordStart$fieldSeparator", cidEnd + 1) else -1
+            if (avidEnd < 0 || cidEnd < 0 || endMarker < 0) break
+
+            val avid = output.substring(start + 1, avidEnd)
+            val cid = output.substring(avidEnd + 1, cidEnd)
+            val content = output.substring(cidEnd + 1, endMarker)
+            if (avid.isNotBlank() && cid.isNotBlank() && content.isNotBlank()) {
+                records += EntryJsonFile(avid, cid, content)
+            }
+            cursor = endMarker + 2
+        }
+        return records
+    }
+
     // 判断路径是否为普通文件
     fun isFile(path: String, useShizuku: Boolean = true): Boolean {
         if (!useShizuku || !isShizukuAvailable()) {
@@ -325,6 +434,65 @@ class ShizukuFileHelper @Inject constructor(
             val audioLen = File(audioPath).length()
             if (videoLen > 0 && audioLen > 0) videoLen to audioLen else null
         }
+    }
+
+    /** Gets the size of many video/audio pairs with one shell process per caller batch. */
+    fun getVideoFileInfoBatch(
+        filePairs: List<Pair<String, String>>,
+        useShizuku: Boolean = true
+    ): Map<String, Pair<Long, Long>> = getVideoFileInfoBatchResult(filePairs, useShizuku).fileInfo
+
+    fun getVideoFileInfoBatchResult(
+        filePairs: List<Pair<String, String>>,
+        useShizuku: Boolean = true
+    ): VideoFileInfoBatchResult {
+        if (filePairs.isEmpty()) return VideoFileInfoBatchResult(emptyMap(), true)
+        if (!useShizuku || !isShizukuAvailable()) {
+            val result = filePairs.mapNotNull { (videoPath, audioPath) ->
+                val videoLength = File(videoPath).length()
+                val audioLength = File(audioPath).length()
+                if (videoLength > 0 && audioLength > 0) videoPath to (videoLength to audioLength) else null
+            }.toMap()
+            return VideoFileInfoBatchResult(result, true)
+        }
+
+        if (shellService == null) return VideoFileInfoBatchResult(emptyMap(), false)
+
+        val completionMarker = "__SILLY_STAT_COMPLETE__"
+        val command = buildString {
+            filePairs.forEachIndexed { index, (videoPath, audioPath) ->
+                append("if [ -s '${escapeSingleQuote(videoPath)}' ] && [ -s '${escapeSingleQuote(audioPath)}' ]; then ")
+                append("printf '\\036$index\\037'; stat -c %s '${escapeSingleQuote(videoPath)}'; ")
+                append("printf '\\037'; stat -c %s '${escapeSingleQuote(audioPath)}'; printf '\\036\\037'; fi; ")
+            }
+            append("printf '$completionMarker'")
+        }
+        val output = try { execSh(command, useShizuku) } catch (e: Exception) {
+            Log.w(TAG, "Shizuku stat batch failed", e)
+            return VideoFileInfoBatchResult(emptyMap(), false)
+        }
+        val completed = output.contains(completionMarker)
+        val resultOutput = output.replace(completionMarker, "")
+        val result = mutableMapOf<String, Pair<Long, Long>>()
+        val recordStart = '\u001e'
+        val separator = '\u001f'
+        var cursor = 0
+        while (true) {
+            val start = resultOutput.indexOf(recordStart, cursor)
+            if (start < 0) break
+            val indexEnd = resultOutput.indexOf(separator, start + 1)
+            val videoEnd = if (indexEnd >= 0) resultOutput.indexOf(separator, indexEnd + 1) else -1
+            val endMarker = if (videoEnd >= 0) resultOutput.indexOf("$recordStart$separator", videoEnd + 1) else -1
+            if (indexEnd < 0 || videoEnd < 0 || endMarker < 0) break
+            val index = resultOutput.substring(start + 1, indexEnd).toIntOrNull()
+            val videoLength = resultOutput.substring(indexEnd + 1, videoEnd).trim().toLongOrNull()
+            val audioLength = resultOutput.substring(videoEnd + 1, endMarker).trim().toLongOrNull()
+            if (index != null && index in filePairs.indices && videoLength != null && audioLength != null) {
+                result[filePairs[index].first] = videoLength to audioLength
+            }
+            cursor = endMarker + 2
+        }
+        return VideoFileInfoBatchResult(result, completed)
     }
 
     // 检查视频+音频两个 m4s 文件是否都存在
@@ -410,6 +578,31 @@ class ShizukuFileHelper @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Shizuku readBinaryFile failed", e)
             try { File(path).readBytes() } catch (e2: Exception) { null }
+        }
+    }
+
+    /** Reads a bounded range without shell/base64 overhead; used by the zero-copy media source. */
+    fun readFileRange(path: String, offset: Long, length: Int, useShizuku: Boolean = true): ByteArray? {
+        if (offset < 0 || length <= 0) return null
+        if (!useShizuku || !isShizukuAvailable()) {
+            return try {
+                java.io.RandomAccessFile(path, "r").use { file ->
+                    if (offset >= file.length()) return null
+                    file.seek(offset)
+                    ByteArray(minOf(length, file.length().minus(offset).toInt())).also { buffer ->
+                        val count = file.read(buffer)
+                        if (count < 0) return null
+                        if (count == buffer.size) return buffer
+                        return buffer.copyOf(count)
+                    }
+                }
+            } catch (_: Exception) { null }
+        }
+        return try {
+            shellService?.readFileRange(path, offset, minOf(length, 256 * 1024))?.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Shizuku readFileRange failed", e)
+            null
         }
     }
 

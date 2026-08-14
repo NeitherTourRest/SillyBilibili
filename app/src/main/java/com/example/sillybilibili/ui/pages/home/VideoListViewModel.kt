@@ -6,6 +6,8 @@ import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
+import com.example.sillybilibili.service.CoverCacheService
+import com.example.sillybilibili.service.OnlineVideoStatusService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -29,13 +31,17 @@ data class VideoListUiState(
 private data class VideoListLoadKey(
     val categoryId: Long?,
     val query: String,
-    val filter: FilterState
+    val filter: FilterState,
+    /** Forces a new database query after a mutation even when filters are unchanged. */
+    val refreshVersion: Long
 )
 
 @HiltViewModel
 class VideoListViewModel @Inject constructor(
     private val videoRepository: VideoRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val coverCacheService: CoverCacheService,
+    private val onlineVideoStatusService: OnlineVideoStatusService? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VideoListUiState())
@@ -48,6 +54,27 @@ class VideoListViewModel @Inject constructor(
     private val _filterSnapshot = MutableStateFlow(FilterSnapshot(FilterState(), "", 0L))
 
     private val _debouncedSearch = _searchQuery.debounce(300L).distinctUntilChanged()
+
+    fun requestCover(video: Video) {
+        viewModelScope.launch {
+            coverCacheService.cacheCover(video)?.let { cachedPath ->
+                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                reload()
+            }
+        }
+    }
+
+    fun requestOnlineStatus(video: Video) {
+        val service = onlineVideoStatusService ?: return
+        viewModelScope.launch {
+            val status = service.checkIfNeeded(video)
+            _uiState.update { state ->
+                state.copy(videos = state.videos.map {
+                    if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
+                })
+            }
+        }
+    }
 
     fun setCategoryId(categoryId: Long?) {
         if (_categoryId.value == categoryId) return
@@ -80,9 +107,9 @@ class VideoListViewModel @Inject constructor(
                 _debouncedSearch,
                 _loadDataTrigger,
                 _filterSnapshot
-            ) { catId, debouncedQ, _, fs ->
+            ) { catId, debouncedQ, refreshVersion, fs ->
                 val effectiveQ = if (fs.filter.isActive && debouncedQ.isEmpty()) fs.querySnapshot else debouncedQ
-                VideoListLoadKey(catId, effectiveQ, fs.filter) to Triple(catId, effectiveQ, fs)
+                VideoListLoadKey(catId, effectiveQ, fs.filter, refreshVersion) to Triple(catId, effectiveQ, fs)
             }
                 .distinctUntilChanged { (old, _), (new, _) -> old == new }
                 .collectLatest { (_, data) ->
@@ -185,6 +212,7 @@ class VideoListViewModel @Inject constructor(
             videoRepository.getVideoById(videoId)?.let {
                 videoRepository.updateVideo(it.copy(categoryId = categoryId))
                 _categoryRefreshTrigger.value++
+                reload()
             }
         }
     }
@@ -192,6 +220,7 @@ class VideoListViewModel @Inject constructor(
     fun deleteVideo(video: Video) {
         viewModelScope.launch {
             videoRepository.deleteVideo(video)
+            _uiState.update { state -> state.copy(videos = state.videos.filterNot { it.id == video.id }) }
             reload()
         }
     }

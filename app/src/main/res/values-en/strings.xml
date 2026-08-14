@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">Silly Bilibili</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Manage export location and app preferences</string>
+    <string name="language">Language</string>
+    <string name="language_description">Choose the app display language. The change takes effect immediately.</string>
+    <string name="language_simplified_chinese">Simplified Chinese</string>
+    <string name="language_english">English</string>
+    <string name="mp4_export_location">MP4 export location</string>
+    <string name="mp4_export_description">Converted videos are saved to this folder.</string>
+    <string name="background_playback">Background playback</string>
+    <string name="background_playback_description">Keep playing after leaving the player, with a shortcut to return.</string>
+    <string name="online_status_refresh">Online status check</string>
+    <string name="online_status_refresh_description">Immediately recheck every scanned cache. Multiple parts of the same video use one request.</string>
+    <string name="online_status_refresh_action">Refresh all statuses</string>
+    <string name="online_status_refreshing">Refreshing…</string>
+    <string name="online_status_refresh_result">Checked %1$d caches in %2$d requests: %3$d online, %4$d unavailable, %5$d unverifiable.</string>
+    <string name="back">Back</string>
+    <string name="home_subtitle">Local cached video library</string>
+    <string name="scan_videos">Scan videos</string>
+    <string name="more">More</string>
+    <string name="exported_videos">Exported videos</string>
+    <string name="category_management">Manage categories</string>
+    <string name="user_guide">User guide</string>
+    <string name="scan_title">Scan cache</string>
+    <string name="scan_subtitle">Discover, filter and refresh your local video library</string>
+    <string name="categories_title">Manage categories</string>
+    <string name="categories_subtitle">Organize your video collection</string>
+    <string name="exported_title">Exported videos</string>
+    <string name="exported_subtitle">Converted MP4 files</string>
+    <string name="guide_title">Guide</string>
+    <string name="guide_subtitle">Permissions and Shizuku setup</string>
+    <string name="category_videos_subtitle">Browse videos by category</string>
+</resources>

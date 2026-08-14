@@ -41,6 +41,17 @@ interface VideoRepository {
 
     suspend fun getTotalVideoCount(): Int
     suspend fun getAllAvIds(): List<Long>  // 获取所有 avid（用于扫描去重）
+    suspend fun getAllVideoPaths(): List<String> // 缓存文件路径，用于按分 P 增量扫描
+    suspend fun reconcileCacheDirectory(directoryPrefix: String, seenPaths: List<String>, scanTimestamp: Long)
+    suspend fun syncCacheDirectory(
+        directoryPrefix: String,
+        scannedVideos: List<Video>,
+        seenPaths: List<String>,
+        scanTimestamp: Long,
+        allowMissingSourceReconciliation: Boolean
+    )
+    suspend fun getAvailableSourcePathsInDirectory(directoryPrefix: String): List<String>
+    suspend fun getExportedVideosOnce(): List<Video>
 
     fun getExportedVideos(): Flow<List<Video>>  // 已转换MP4的视频
 

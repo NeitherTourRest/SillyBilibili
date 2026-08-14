@@ -88,6 +88,32 @@ class SettingsServiceTest {
         verify { editor.putBoolean("auto_scan", false) }
     }
 
+    @Test
+    fun `background playback defaults to enabled`() {
+        val service = setupService()
+        assertTrue(service.backgroundPlaybackEnabled)
+    }
+
+    @Test
+    fun `background playback setter persists the user choice`() {
+        val service = setupService()
+        service.backgroundPlaybackEnabled = false
+        verify { editor.putBoolean("background_playback", false) }
+    }
+
+    @Test
+    fun `app language defaults to simplified Chinese`() {
+        val service = setupService()
+        assertEquals(SettingsService.AppLanguage.SIMPLIFIED_CHINESE, service.appLanguage)
+    }
+
+    @Test
+    fun `app language setter persists the selected language tag`() {
+        val service = setupService()
+        service.appLanguage = SettingsService.AppLanguage.ENGLISH
+        verify { editor.putString("app_language", "en") }
+    }
+
     // ── clear ──────────────────────────────────────────────────
 
     @Test

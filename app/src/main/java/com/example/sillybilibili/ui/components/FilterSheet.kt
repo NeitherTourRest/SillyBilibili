@@ -30,13 +30,13 @@ fun FilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = DarkSurface,
-        shape = RoundedCornerShape(0.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 36.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -51,7 +51,7 @@ fun FilterSheet(
                     Spacer(modifier = Modifier.height(2.dp))
                     Box(
                         modifier = Modifier
-                            .width(40.dp).height(3.dp).clip(RoundedCornerShape(0.dp))
+                            .width(40.dp).height(4.dp).clip(RoundedCornerShape(4.dp))
                             .background(Brush.linearGradient(listOf(CyberVermilion, CyberGold)))
                     )
                 }
@@ -89,13 +89,13 @@ fun FilterSheet(
                 OutlinedButton(
                     onClick = { onDraftFilterChange(FilterState()) },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(0.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) { Text("重置") }
 
                 Button(
                     onClick = { onApplyFilter(currentFilter); onDismiss() },
                     modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(0.dp),
+                    shape = MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.buttonColors(containerColor = CyberVermilion)
                 ) {
                     Text("确认", fontWeight = FontWeight.Bold, color = Color.White)
@@ -108,7 +108,7 @@ fun FilterSheet(
 @Composable
 private fun FilterSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column {
-        Text(title, style = MaterialTheme.typography.labelMedium, color = Color(0xFF8080A0), fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.labelLarge, color = Color(0xFFC8CFDD), fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         content()
     }
@@ -124,9 +124,9 @@ private fun <T> FilterChipRow(options: List<Pair<T?, String>>, selected: T?, onS
                 label = {
                     Text(label, fontWeight = if (selected == value) FontWeight.Bold else FontWeight.Normal)
                 },
-                shape = RoundedCornerShape(0.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = CyberVermilion.copy(alpha = 0.15f),
+                    selectedContainerColor = CyberVermilion.copy(alpha = 0.2f),
                     containerColor = DarkSurfaceVariant,
                     selectedLabelColor = CyberVermilion,
                     labelColor = Color(0xFF8080A0)

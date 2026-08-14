@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.ui.components.CategoryCard
 import com.example.sillybilibili.ui.components.ColorPicker
+import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,13 +40,9 @@ fun CategoriesPage(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Categories", fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White.copy(alpha = 0.8f)) } },
-                actions = { IconButton(onClick = { showAddDialog = true }) { Icon(Icons.Default.Add, "Add Category", tint = CyberGold) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-            Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(CyberVermilion, CyberGold, NeonPurple))))
+            AppTopBar(title = "分类管理", subtitle = "整理你的视频收藏", onNavigateBack = onNavigateBack) {
+                IconButton(onClick = { showAddDialog = true }) { Icon(Icons.Default.Add, "新建分类", tint = CyberVermilion) }
+            }
         },
         containerColor = DarkBackground
     ) { paddingValues ->
@@ -53,12 +50,13 @@ fun CategoriesPage(
             Box(Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.Category, null, Modifier.size(64.dp), tint = Color(0xFF404060))
-                    Text("No categories yet", style = MaterialTheme.typography.bodyLarge, color = Color(0xFF404060))
-                    TextButton(onClick = { showAddDialog = true }) { Text("Create your first category", color = CyberGold) }
+                    Text("还没有分类", style = MaterialTheme.typography.titleMedium, color = DarkTextSecondary, fontWeight = FontWeight.Bold)
+                    Text("创建分类，快速定位常看的视频", style = MaterialTheme.typography.bodyMedium, color = DarkTextTertiary)
+                    TextButton(onClick = { showAddDialog = true }) { Text("创建第一个分类") }
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(paddingValues), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(paddingValues), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(uiState.categories) { category ->
                     CategoryCard(category = category, onClick = { onNavigateToVideoList(category.id) }, onEditClick = { editingCategory = category }, onDeleteClick = { viewModel.deleteCategory(category.id) })
                 }
@@ -75,14 +73,14 @@ fun CategoriesPage(
             onDismissRequest = { showAddDialog = false; editingCategory = null },
             containerColor = DarkSurface,
             iconContentColor = CyberVermilion,
-            shape = RoundedCornerShape(0.dp),
-            title = { Text(if (isEditing) "Edit Category" else "New Category", fontWeight = FontWeight.Bold, color = CyberGold) },
+            shape = MaterialTheme.shapes.large,
+            title = { Text(if (isEditing) "编辑分类" else "新建分类", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(
-                        value = name, onValueChange = { name = it }, label = { Text("Name", color = Color(0xFF606080)) },
+                        value = name, onValueChange = { name = it }, label = { Text("分类名称") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        shape = RoundedCornerShape(0.dp),
+                        shape = MaterialTheme.shapes.medium,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyberVermilion, unfocusedBorderColor = DarkDivider,
                             cursorColor = CyberVermilion, focusedTextColor = Color(0xFFE8E8F0),
@@ -100,11 +98,11 @@ fun CategoriesPage(
                         else viewModel.addCategory(name, selectedColor.hashCode().toLong())
                         showAddDialog = false; editingCategory = null
                     }
-                }, colors = ButtonDefaults.buttonColors(containerColor = CyberVermilion), shape = RoundedCornerShape(0.dp)) {
-                    Text(if (isEditing) "Save" else "Create", fontWeight = FontWeight.Bold)
+                }, colors = ButtonDefaults.buttonColors(containerColor = CyberVermilion), shape = MaterialTheme.shapes.medium) {
+                    Text(if (isEditing) "保存" else "创建", fontWeight = FontWeight.Bold)
                 }
             },
-            dismissButton = { TextButton(onClick = { showAddDialog = false; editingCategory = null }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF606080))) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { showAddDialog = false; editingCategory = null }) { Text("取消") } }
         )
     }
 }

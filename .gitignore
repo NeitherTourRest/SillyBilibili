@@ -13,7 +13,10 @@ local.properties
 *.log
 .env
 key
+keystore.properties
+video_example/
 .omo/
 .codegraph/
 .sisyphus/
 .vscode/
+.codex

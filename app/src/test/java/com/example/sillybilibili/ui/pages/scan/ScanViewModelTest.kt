@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.example.sillybilibili.service.SettingsService
+import com.example.sillybilibili.service.ScanJobRegistry
 import com.example.sillybilibili.service.VideoScanService
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,7 @@ class ScanViewModelTest {
     private lateinit var context: Context
     private lateinit var settingsService: SettingsService
     private lateinit var videoScanService: VideoScanService
+    private lateinit var scanJobRegistry: ScanJobRegistry
     private lateinit var viewModel: ScanViewModel
 
     @Before
@@ -34,10 +36,19 @@ class ScanViewModelTest {
         context = mockk(relaxed = true)
         settingsService = mockk()
         videoScanService = mockk()
+        scanJobRegistry = ScanJobRegistry()
 
         every { settingsService.scanPath } returns null
         every { videoScanService.getBilibiliPathConstant() } returns "/storage/emulated/0/Android/data/tv.danmaku.bili/download"
         every { videoScanService.isShizukuAvailable() } returns true
+        every { videoScanService.canAccessDirectoryDirectly(any()) } returns false
+        coEvery { videoScanService.inspectDirectory(any()) } returns VideoScanService.DirectorySnapshot(
+            access = VideoScanService.ScanAccess.SHIZUKU,
+            totalCacheFolders = 12,
+            scannedVideoCount = 8,
+            scannedCacheFolderCount = 7
+        )
+        coEvery { videoScanService.inspectDirectoryFromUri(any()) } returns VideoScanService.DirectorySnapshot()
 
         val prefs = mockk<SharedPreferences>(relaxed = true)
         val editor = mockk<SharedPreferences.Editor>(relaxed = true)
@@ -46,7 +57,7 @@ class ScanViewModelTest {
         every { editor.putString(any(), any()) } returns editor
         every { prefs.getString("saf_tree_uri", null) } returns null
 
-        viewModel = ScanViewModel(context, settingsService, videoScanService)
+        viewModel = ScanViewModel(context, settingsService, videoScanService, scanJobRegistry)
     }
 
     @After
@@ -59,6 +70,8 @@ class ScanViewModelTest {
         advanceUntilIdle()
         assertEquals("/storage/emulated/0/Android/data/tv.danmaku.bili/download", viewModel.uiState.value.scanPath)
         assertTrue(viewModel.uiState.value.isShizukuAvailable)
+        assertEquals(12, viewModel.uiState.value.directorySnapshot.totalCacheFolders)
+        assertEquals(8, viewModel.uiState.value.directorySnapshot.scannedVideoCount)
     }
 
     @Test

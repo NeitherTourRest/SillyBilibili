@@ -6,7 +6,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,13 +26,12 @@ fun VideoContextMenu(
     video: Video,
     onDismiss: () -> Unit,
     onRequestAssignCategory: (Video) -> Unit,
-    onRequestDelete: (Video) -> Unit,
-    onRequestConvert: (Video) -> Unit
+    onRequestDelete: (Video) -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = DarkSurface,
-        shape = RoundedCornerShape(0.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
             modifier = Modifier
@@ -43,7 +41,7 @@ fun VideoContextMenu(
             Text(
                 text = video.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = CyberVermilion,
+                color = DarkTextPrimary,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 maxLines = 2
@@ -64,16 +62,6 @@ fun VideoContextMenu(
                 onClick = {
                     onDismiss()
                     onRequestAssignCategory(video)
-                }
-            )
-
-            MenuItem(
-                icon = Icons.Default.FileDownload,
-                label = "转换 MP4",
-                iconTint = CyberVermilion,
-                onClick = {
-                    onDismiss()
-                    onRequestConvert(video)
                 }
             )
 
@@ -116,7 +104,7 @@ private fun MenuItem(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(0.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(DarkSurfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -147,7 +135,7 @@ fun AssignCategoryDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DarkSurface,
-        shape = RoundedCornerShape(0.dp),
+        shape = MaterialTheme.shapes.large,
         title = {
             Text(
                 "分配分类",
@@ -160,7 +148,7 @@ fun AssignCategoryDialog(
                 Text(
                     text = video.title,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF8080A0),
+                    color = DarkTextSecondary,
                     maxLines = 2
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -175,7 +163,7 @@ fun AssignCategoryDialog(
                         Box(
                             modifier = Modifier
                                 .size(12.dp)
-                                .clip(RoundedCornerShape(0.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(Color(category.color))
                         )
                         Spacer(modifier = Modifier.width(12.dp))

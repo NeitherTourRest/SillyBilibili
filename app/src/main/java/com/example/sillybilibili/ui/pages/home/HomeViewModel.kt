@@ -7,6 +7,9 @@ import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.VideoScanService
+import com.example.sillybilibili.service.CoverCacheService
+import com.example.sillybilibili.service.ExternalMediaSyncService
+import com.example.sillybilibili.service.OnlineVideoStatusService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -57,14 +60,19 @@ internal data class FilterSnapshot(
 private data class LoadKey(
     val categoryId: Long?,
     val query: String,
-    val filter: FilterState
+    val filter: FilterState,
+    /** Forces a new database query after a mutation even when filters are unchanged. */
+    val refreshVersion: Long
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val videoRepository: VideoRepository,
     private val categoryRepository: CategoryRepository,
-    private val videoScanService: VideoScanService
+    private val videoScanService: VideoScanService,
+    private val coverCacheService: CoverCacheService? = null,
+    private val externalMediaSyncService: ExternalMediaSyncService? = null,
+    private val onlineVideoStatusService: OnlineVideoStatusService? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -78,7 +86,34 @@ class HomeViewModel @Inject constructor(
 
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
-    init { loadCategories(); loadVideos() }
+    init { loadCategories(); loadVideos(); reconcileExternalFiles() }
+
+    private fun reconcileExternalFiles() {
+        externalMediaSyncService ?: return
+        viewModelScope.launch { externalMediaSyncService.reconcileExportedFiles() }
+    }
+
+    fun requestCover(video: Video) {
+        val service = coverCacheService ?: return
+        viewModelScope.launch {
+            service.cacheCover(video)?.let { cachedPath ->
+                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                _refreshTrigger.value++
+            }
+        }
+    }
+
+    fun requestOnlineStatus(video: Video) {
+        val service = onlineVideoStatusService ?: return
+        viewModelScope.launch {
+            val status = service.checkIfNeeded(video)
+            _uiState.update { state ->
+                state.copy(videos = state.videos.map {
+                    if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
+                })
+            }
+        }
+    }
 
     private fun loadCategories() {
         viewModelScope.launch {
@@ -94,11 +129,11 @@ class HomeViewModel @Inject constructor(
                 _debouncedSearch,
                 _refreshTrigger,
                 _filterSnapshot
-            ) { catId, debouncedQ, _, fs ->
+            ) { catId, debouncedQ, refreshVersion, fs ->
                 // Use debounced search as primary; only fall back to snapshot when
                 // debounce hasn't caught up (race between typing and filter apply)
                 val effectiveQ = if (fs.filter.isActive && debouncedQ.isEmpty()) fs.querySnapshot else debouncedQ
-                LoadKey(catId, effectiveQ, fs.filter) to fs
+                LoadKey(catId, effectiveQ, fs.filter, refreshVersion) to fs
             }
                 .distinctUntilChanged { (old, _), (new, _) -> old == new }
                 .collectLatest { (key, fs) ->
@@ -224,6 +259,7 @@ class HomeViewModel @Inject constructor(
             videoRepository.getVideoById(videoId)?.let {
                 videoRepository.updateVideo(it.copy(categoryId = categoryId))
                 _categoryRefreshTrigger.value++
+                refreshVideos()
             }
         }
     }
@@ -232,6 +268,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             videoRepository.deleteVideo(video)
             _categoryRefreshTrigger.value++
+            _uiState.update { state -> state.copy(videos = state.videos.filterNot { it.id == video.id }) }
+            refreshVideos()
         }
     }
 

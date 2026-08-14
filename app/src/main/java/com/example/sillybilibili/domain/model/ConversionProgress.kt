@@ -18,7 +18,8 @@ data class ConversionProgress(
     val progress: Float,
     val status: ConversionStatus,
     val outputPath: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val statusMessage: String? = null
 )
 
 // 转换状态枚举 — 只有这 4 种可能

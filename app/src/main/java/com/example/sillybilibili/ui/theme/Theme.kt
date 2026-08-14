@@ -4,34 +4,47 @@
 
 package com.example.sillybilibili.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
     primary = CyberVermilion,
-    onPrimary = Color.Black,
-    primaryContainer = CyberVermilion.copy(alpha = 0.15f),
-    onPrimaryContainer = CyberVermilion,
+    onPrimary = Color.White,
+    primaryContainer = CyberVermilion.copy(alpha = 0.16f),
+    onPrimaryContainer = CyberVermilionLight,
     secondary = CyberGold,
-    onSecondary = Color.Black,
+    onSecondary = Color(0xFF382600),
     secondaryContainer = CyberGold.copy(alpha = 0.12f),
     onSecondaryContainer = CyberGold,
     tertiary = NeonPurple,
     onTertiary = Color.Black,
     background = DarkBackground,
-    onBackground = Color(0xFFE8E8F0),
+    onBackground = DarkTextPrimary,
     surface = DarkSurface,
-    onSurface = Color(0xFFE8E8F0),
+    onSurface = DarkTextPrimary,
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFFA0A0B8),
+    onSurfaceVariant = DarkTextSecondary,
     outline = DarkDivider,
-    outlineVariant = Color(0xFF3A3A54),
+    outlineVariant = Color(0xFF40495C),
     error = NeonRed,
     onError = Color.Black,
     errorContainer = NeonRed.copy(alpha = 0.12f),
     onErrorContainer = NeonRed
+)
+
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(30.dp)
 )
 
 @Composable
@@ -41,7 +54,12 @@ fun SillyBilibiliTheme(
     MaterialTheme(
         colorScheme = DarkColorScheme,
         typography = Typography,
-        content = content
-    )
+        shapes = AppShapes,
+    ) {
+        Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            GlassBackground()
+            content()
+        }
+    }
 }
 

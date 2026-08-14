@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun ConversionStatusView(status: ConversionStatus, progress: Float, message: String?, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(0.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    Card(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = DarkCard), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             when (status) {
@@ -33,13 +33,13 @@ fun ConversionStatusView(status: ConversionStatus, progress: Float, message: Str
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     when (status) {
-                        ConversionStatus.PENDING -> "Waiting..."; ConversionStatus.CONVERTING -> "${(progress * 100).toInt()}%"
-                        ConversionStatus.COMPLETED -> "Completed"; ConversionStatus.FAILED -> "Failed"
+                        ConversionStatus.PENDING -> "Waiting to start"; ConversionStatus.CONVERTING -> "Converting ${(progress * 100).toInt()}%"
+                        ConversionStatus.COMPLETED -> "Conversion complete"; ConversionStatus.FAILED -> "Conversion failed"
                     },
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
                     color = when (status) { ConversionStatus.FAILED -> NeonRed; ConversionStatus.COMPLETED -> NeonGreen; else -> Color(0xFFF0F0F8) }
                 )
-                if (message != null) Text(message, style = MaterialTheme.typography.bodySmall, color = if (status == ConversionStatus.FAILED) NeonRed.copy(alpha = 0.7f) else Color(0xFF606080))
+                if (message != null) Text(message, style = MaterialTheme.typography.bodySmall, color = if (status == ConversionStatus.FAILED) NeonRed.copy(alpha = 0.8f) else DarkTextSecondary)
             }
         }
     }

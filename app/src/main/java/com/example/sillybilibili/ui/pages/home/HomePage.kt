@@ -1,34 +1,85 @@
 package com.example.sillybilibili.ui.pages.home
 
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.YoutubeSearchedFor
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sillybilibili.domain.model.Video
-import com.example.sillybilibili.ui.components.*
+import com.example.sillybilibili.R
+import com.example.sillybilibili.ui.components.AppTopBar
+import com.example.sillybilibili.ui.components.AssignCategoryDialog
+import com.example.sillybilibili.ui.components.CategoryChip
+import com.example.sillybilibili.ui.components.FilterSheet
+import com.example.sillybilibili.ui.components.FastScrollBar
+import com.example.sillybilibili.ui.components.SearchBar
+import com.example.sillybilibili.ui.components.VideoCard
+import com.example.sillybilibili.ui.components.VideoContextMenu
 import com.example.sillybilibili.ui.pages.scan.ScanViewModel
-import com.example.sillybilibili.ui.theme.*
+import com.example.sillybilibili.ui.theme.CyberVermilion
+import com.example.sillybilibili.ui.theme.DarkBackground
+import com.example.sillybilibili.ui.theme.DarkDivider
+import com.example.sillybilibili.ui.theme.DarkSurfaceVariant
+import com.example.sillybilibili.ui.theme.DarkTextSecondary
+import com.example.sillybilibili.ui.theme.DarkTextTertiary
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomePage(
     onNavigateToVideoList: (Long?) -> Unit,
@@ -36,99 +87,163 @@ fun HomePage(
     onNavigateToSettings: () -> Unit,
     onNavigateToGuide: () -> Unit,
     onNavigateToScan: () -> Unit,
-    onNavigateToVideoDetail: (Long) -> Unit,
+    onNavigateToPlayer: (Video, List<Video>) -> Unit,
     onNavigateToExported: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var contextMenuVideo by remember { mutableStateOf<Video?>(null) }
     var assignDialogVideo by remember { mutableStateOf<Video?>(null) }
     var deleteConfirmVideo by remember { mutableStateOf<Video?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var filterDraft by remember { mutableStateOf(FilterState()) }
+    var showMoreMenu by remember { mutableStateOf(false) }
 
-    // Activity-scoped ScanViewModel — survives navigation, shows progress on HomePage
     val scanViewModel: ScanViewModel = hiltViewModel(LocalContext.current as ComponentActivity)
     val scanUiState by scanViewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshVideos() }
-    LaunchedEffect(listState) { snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { if (it != null && it >= uiState.videos.size - 5) viewModel.loadMore() } }
+    LaunchedEffect(listState, uiState.videos.size, uiState.hasMoreData) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { lastIndex ->
+            if (uiState.hasMoreData && lastIndex != null && lastIndex >= uiState.videos.size - 5) viewModel.loadMore()
+        }
+    }
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Row(verticalAlignment = Alignment.CenterVertically) { Text("\u26A1", color = CyberGold); Spacer(Modifier.width(4.dp)); Text("SILLY BILIBILI", fontWeight = FontWeight.Bold, letterSpacing = 2.sp, color = Color.White) } },
-                actions = {
-                    IconButton(onClick = { filterDraft = uiState.filterState; showFilterSheet = true }) { BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) { Icon(Icons.Default.FilterList, "Filter", tint = Color.White.copy(alpha = 0.8f)) } }
-                    IconButton(onClick = onNavigateToScan) { Icon(Icons.Default.YoutubeSearchedFor, "Scan", tint = Color.White.copy(alpha = 0.8f)) }
-                    IconButton(onClick = onNavigateToExported) { Icon(Icons.Default.FolderOpen, "Exported", tint = Color.White.copy(alpha = 0.8f)) }
-                    IconButton(onClick = onNavigateToGuide) { Icon(Icons.Default.MenuBook, "Guide", tint = Color.White.copy(alpha = 0.8f)) }
-                    IconButton(onClick = onNavigateToCategories) { Icon(Icons.Default.Category, "Categories", tint = Color.White.copy(alpha = 0.8f)) }
-                    IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings", tint = Color.White.copy(alpha = 0.8f)) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-            Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(CyberVermilion, CyberGold, NeonPurple))))
+            AppTopBar(title = stringResource(R.string.app_name), subtitle = stringResource(R.string.home_subtitle)) {
+                IconButton(onClick = { filterDraft = uiState.filterState; showFilterSheet = true }) {
+                    BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) {
+                        Icon(Icons.Default.FilterList, contentDescription = "筛选")
+                    }
+                }
+                IconButton(onClick = onNavigateToScan) { Icon(Icons.Default.YoutubeSearchedFor, contentDescription = stringResource(R.string.scan_videos)) }
+                Box {
+                    IconButton(onClick = { showMoreMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more)) }
+                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.exported_videos)) }, leadingIcon = { Icon(Icons.Default.FolderOpen, null) }, onClick = { showMoreMenu = false; onNavigateToExported() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.category_management)) }, leadingIcon = { Icon(Icons.Default.Category, null) }, onClick = { showMoreMenu = false; onNavigateToCategories() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.user_guide)) }, leadingIcon = { Icon(Icons.Default.MenuBook, null) }, onClick = { showMoreMenu = false; onNavigateToGuide() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.settings_title)) }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { showMoreMenu = false; onNavigateToSettings() })
+                    }
+                }
+            }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = DarkBackground
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
-            // Background scan progress indicator
             if (scanUiState.isScanning && scanUiState.scanProgress != null) {
-                val p = scanUiState.scanProgress!!
-                Surface(color = CyberVermilion.copy(alpha = 0.08f), shape = RoundedCornerShape(0.dp)) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                val progress = scanUiState.scanProgress!!
+                Surface(color = CyberVermilion.copy(alpha = 0.12f), shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("正在扫描缓存", style = MaterialTheme.typography.labelLarge, color = CyberVermilion)
+                            Text("发现 ${progress.foundVideoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
+                        }
                         LinearProgressIndicator(
-                            progress = { p.processedFolders.toFloat() / p.totalFolders.coerceAtLeast(1).toFloat() },
-                            modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(0.dp)),
-                            color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)
+                            progress = { progress.processedFolders.toFloat() / progress.totalFolders.coerceAtLeast(1).toFloat() },
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = CyberVermilion,
+                            trackColor = CyberVermilion.copy(alpha = 0.16f)
                         )
-                        Spacer(Modifier.width(12.dp))
-                        Text("${p.foundVideoCount}v", style = MaterialTheme.typography.labelSmall, color = CyberVermilion, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "Search videos...")
-
+            SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索本地视频")
             if (uiState.categories.isNotEmpty()) {
-                LazyRow(Modifier.padding(vertical = 8.dp), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("分类", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = onNavigateToCategories) { Text("管理") }
+                }
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        FilterChip(selected = uiState.selectedCategoryId == null, onClick = { viewModel.selectCategory(null) }, shape = RoundedCornerShape(0.dp),
-                            label = { Text("All", fontWeight = if (uiState.selectedCategoryId == null) FontWeight.Bold else FontWeight.Normal) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = CyberVermilion.copy(alpha = 0.15f), containerColor = DarkSurfaceVariant, selectedLabelColor = CyberVermilion, labelColor = Color(0xFFA0A0B8)),
-                            border = FilterChipDefaults.filterChipBorder(borderColor = DarkDivider, selectedBorderColor = CyberVermilion, enabled = true, selected = uiState.selectedCategoryId == null))
+                        FilterChip(
+                            selected = uiState.selectedCategoryId == null,
+                            onClick = { viewModel.selectCategory(null); scope.launch { snackbarHostState.showSnackbar("已显示全部视频") } },
+                            label = { Text("全部") },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = CyberVermilion.copy(alpha = 0.2f), selectedLabelColor = CyberVermilion, containerColor = DarkSurfaceVariant, labelColor = DarkTextSecondary),
+                            border = FilterChipDefaults.filterChipBorder(borderColor = DarkDivider, selectedBorderColor = CyberVermilion, enabled = true, selected = uiState.selectedCategoryId == null)
+                        )
                     }
-                    items(uiState.categories) { cat -> CategoryChip(name = cat.name, color = Color(cat.color), count = cat.videoCount, selected = uiState.selectedCategoryId == cat.id, onClick = { viewModel.selectCategory(cat.id) }) }
+                    items(uiState.categories) { category ->
+                        CategoryChip(category.name, Color(category.color), category.videoCount, uiState.selectedCategoryId == category.id, onClick = {
+                            viewModel.selectCategory(category.id)
+                            scope.launch { snackbarHostState.showSnackbar("已切换到「${category.name}」") }
+                        })
+                    }
                 }
             }
 
-            if (uiState.isLoading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) }
-            else if (uiState.videos.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.VideoLibrary, null, Modifier.size(64.dp), tint = Color(0xFF404060)); Text("No videos found", color = Color(0xFF404060), fontWeight = FontWeight.Bold)
-                }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (uiState.videos.isEmpty()) "视频库" else if (uiState.hasMoreData) "已加载 ${uiState.videos.size}+ 个视频" else "${uiState.videos.size} 个视频",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (uiState.filterState.isActive) Text("已启用筛选", style = MaterialTheme.typography.labelMedium, color = CyberVermilion)
             }
-            else Column(Modifier.weight(1f)) {
-                LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(uiState.videos, key = { it.id }) { video -> VideoCard(video = video, onClick = { onNavigateToVideoDetail(video.id) }, onLongClick = { contextMenuVideo = video }) }
-                    if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) } }
-                }
-                if (uiState.videos.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = { val p = uiState.currentPage - 1; if (p >= 0) viewModel.goToPage(p) }, enabled = uiState.currentPage > 0, shape = RoundedCornerShape(0.dp)) { Text("< Prev", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) }
-                        Text("PAGE ${uiState.currentPage + 1}", style = MaterialTheme.typography.labelMedium, color = Color(0xFF606080), fontWeight = FontWeight.Bold)
-                        OutlinedButton(onClick = { viewModel.goToPage(uiState.currentPage + 1) }, enabled = uiState.hasMoreData, shape = RoundedCornerShape(0.dp)) { Text("Next >", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) }
+
+            when {
+                uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion) }
+                uiState.videos.isEmpty() -> EmptyVideoLibrary(onScan = onNavigateToScan)
+                else -> Box(Modifier.weight(1f)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(uiState.videos, key = { it.id }) { video ->
+                            VideoCard(video, onClick = { onNavigateToPlayer(video, uiState.videos) }, onLongClick = { contextMenuVideo = video }, onCoverRequested = viewModel::requestCover, onOnlineStatusRequested = viewModel::requestOnlineStatus)
+                        }
+                        if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
-                    if (uiState.hasMoreData && !uiState.isLoadingMore) TextButton(onClick = { viewModel.loadAll() }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(0.dp)).background(DarkSurfaceVariant)) { Text("LOAD ALL  (${uiState.videos.size}+)", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = CyberGold) }
+                    FastScrollBar(
+                        listState = listState,
+                        itemCount = uiState.videos.size,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(vertical = 8.dp)
+                    )
                 }
             }
         }
     }
 
-    if (contextMenuVideo != null) VideoContextMenu(video = contextMenuVideo!!, onDismiss = { contextMenuVideo = null }, onRequestAssignCategory = { assignDialogVideo = it }, onRequestDelete = { deleteConfirmVideo = it }, onRequestConvert = { onNavigateToVideoDetail(it.id) })
-    assignDialogVideo?.let { v -> AssignCategoryDialog(video = v, categories = uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { cid -> viewModel.assignVideoToCategory(v.id, cid); assignDialogVideo = null }) }
-    deleteConfirmVideo?.let { v -> AlertDialog(onDismissRequest = { deleteConfirmVideo = null }, containerColor = DarkSurface, shape = RoundedCornerShape(0.dp), title = { Text("Delete", fontWeight = FontWeight.Bold, color = NeonRed) }, text = { Text("Delete this video?", color = Color(0xFF8080A0)) }, confirmButton = { TextButton(onClick = { viewModel.deleteVideo(v); deleteConfirmVideo = null }) { Text("Delete", color = NeonRed, fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { deleteConfirmVideo = null }) { Text("Cancel", color = Color(0xFF606080)) } }) }
-    if (showFilterSheet) FilterSheet(currentFilter = filterDraft, onDraftFilterChange = { filterDraft = it }, onApplyFilter = { viewModel.applyFilter(it); showFilterSheet = false }, onDismiss = { showFilterSheet = false })
+    contextMenuVideo?.let { VideoContextMenu(it, onDismiss = { contextMenuVideo = null }, onRequestAssignCategory = { assignDialogVideo = it }, onRequestDelete = { deleteConfirmVideo = it }) }
+    assignDialogVideo?.let { video -> AssignCategoryDialog(video, uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { categoryId -> viewModel.assignVideoToCategory(video.id, categoryId); assignDialogVideo = null; scope.launch { snackbarHostState.showSnackbar("分类已更新") } }) }
+    deleteConfirmVideo?.let { video ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteConfirmVideo = null },
+            shape = MaterialTheme.shapes.large,
+            title = { Text("从列表移除视频") },
+            text = { Text("这不会删除原始缓存文件。") },
+            confirmButton = { TextButton(onClick = { viewModel.deleteVideo(video); deleteConfirmVideo = null; scope.launch { snackbarHostState.showSnackbar("视频已从列表移除") } }) { Text("移除", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deleteConfirmVideo = null }) { Text("取消") } }
+        )
+    }
+    if (showFilterSheet) FilterSheet(currentFilter = filterDraft, onDraftFilterChange = { filterDraft = it }, onApplyFilter = { filter -> viewModel.applyFilter(filter); showFilterSheet = false; scope.launch { snackbarHostState.showSnackbar(if (filter.isActive) "筛选条件已应用" else "筛选已重置") } }, onDismiss = { showFilterSheet = false })
+}
+
+@Composable
+private fun EmptyVideoLibrary(onScan: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(shape = MaterialTheme.shapes.large, color = DarkSurfaceVariant) { Icon(Icons.Default.VideoLibrary, null, modifier = Modifier.padding(20.dp).size(38.dp), tint = CyberVermilion) }
+            Text("还没有本地视频", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("扫描 B 站缓存目录后，视频会显示在这里。", color = DarkTextTertiary, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.Button(onClick = onScan) { Icon(Icons.Default.YoutubeSearchedFor, null); Spacer(Modifier.width(6.dp)); Text("开始扫描") }
+        }
+    }
 }

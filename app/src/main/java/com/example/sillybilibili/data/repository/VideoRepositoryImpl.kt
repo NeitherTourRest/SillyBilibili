@@ -118,6 +118,39 @@ class VideoRepositoryImpl @Inject constructor(
         return videoDao.getAllAvIds()
     }
 
+    override suspend fun getAllVideoPaths(): List<String> {
+        return videoDao.getAllVideoPaths()
+    }
+
+    override suspend fun reconcileCacheDirectory(directoryPrefix: String, seenPaths: List<String>, scanTimestamp: Long) {
+        // SQLite supports a bounded number of bind parameters; keep large libraries safe.
+        seenPaths.chunked(800).forEach { paths -> videoDao.markSourcesSeen(paths, scanTimestamp) }
+        videoDao.markSourcesMissingInDirectory(directoryPrefix, scanTimestamp)
+        videoDao.deleteMissingUnexportedVideos()
+    }
+
+    override suspend fun syncCacheDirectory(
+        directoryPrefix: String,
+        scannedVideos: List<Video>,
+        seenPaths: List<String>,
+        scanTimestamp: Long,
+        allowMissingSourceReconciliation: Boolean
+    ) {
+        videoDao.syncCacheDirectory(
+            directoryPrefix = directoryPrefix,
+            videos = scannedVideos.map { it.toEntity() },
+            seenPaths = seenPaths,
+            scanTimestamp = scanTimestamp,
+            allowMissingSourceReconciliation = allowMissingSourceReconciliation
+        )
+    }
+
+    override suspend fun getAvailableSourcePathsInDirectory(directoryPrefix: String): List<String> =
+        videoDao.getAvailableSourcePathsInDirectory(directoryPrefix)
+
+    override suspend fun getExportedVideosOnce(): List<Video> =
+        videoDao.getExportedVideosOnce().map { it.toDomain() }
+
     override fun getExportedVideos(): Flow<List<Video>> {
         return videoDao.getExportedVideos().map { entities ->
             entities.map { it.toDomain() }
@@ -187,8 +220,15 @@ class VideoRepositoryImpl @Inject constructor(
         duration = duration,
         categoryId = categoryId,
         coverPath = coverPath,
+        coverSourcePath = coverSourcePath,
         addedAt = addedAt,
-        exportedPath = exportedPath
+        exportedPath = exportedPath,
+        sourceAvailable = sourceAvailable,
+        sourceLastSeenAt = sourceLastSeenAt,
+        exportedSize = exportedSize,
+        exportedLastModified = exportedLastModified,
+        onlineStatus = com.example.sillybilibili.domain.model.OnlineVideoStatus.fromStorage(onlineStatus),
+        onlineCheckedAt = onlineCheckedAt
     )
 
     private fun Video.toEntity() = VideoEntity(
@@ -206,7 +246,14 @@ class VideoRepositoryImpl @Inject constructor(
         duration = duration,
         categoryId = categoryId,
         coverPath = coverPath,
+        coverSourcePath = coverSourcePath,
         addedAt = addedAt,
-        exportedPath = exportedPath
+        exportedPath = exportedPath,
+        sourceAvailable = sourceAvailable,
+        sourceLastSeenAt = sourceLastSeenAt,
+        exportedSize = exportedSize,
+        exportedLastModified = exportedLastModified,
+        onlineStatus = onlineStatus.name,
+        onlineCheckedAt = onlineCheckedAt
     )
 }

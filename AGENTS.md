@@ -153,7 +153,14 @@ Room → SQLite
 
 加载方式：`skill_view(name='systematic-debugging')` 或 `skill_view(name='test-driven-development')`
 
+## 版本控制与文档
+
+- 每次影响用户功能、交互、权限、构建或使用步骤的改动，都必须在同一提交中更新 `README.md`。
+- 完成测试与 release APK 构建后，使用清晰的 Conventional Commit 信息提交，并推送到 `origin/master`。
+- 严禁提交 APK、keystore、`keystore.properties`、密码、令牌、真实缓存媒体或其他私密数据。
+- release 签名信息只从本机忽略的 `keystore.properties` 读取；参照 `keystore.properties.example` 配置。
+
 ## 已知问题
 1. `String.format()` 在 Kotlin 中报 Unresolved reference → 用 Kotlin 的 `"".format()` 替代
 2. Gradle 构建需要网络下载依赖（首次构建慢）
-3. Shizuku 需要设备 Root 或授权
+3. Shizuku 需要在设备上启动并向本应用授权；不要求 Root

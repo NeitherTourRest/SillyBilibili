@@ -71,12 +71,16 @@ interface VideoDao {
 
     // --- 统计查询 ---
 
-    @Query("SELECT COUNT(*) FROM videos")
+    @Query("SELECT COUNT(*) FROM videos WHERE sourceAvailable = 1")
     suspend fun getTotalVideoCount(): Int
 
     // 获取所有 avId，用于扫描去重
     @Query("SELECT avid FROM videos")
     suspend fun getAllAvIds(): List<Long>
+
+    // 路径是缓存视频的实际唯一标识；同一个 av 可以有多个 cid（分 P）。
+    @Query("SELECT path FROM videos")
+    suspend fun getAllVideoPaths(): List<String>
 
     // --- 统一过滤+搜索+分页查询 ---
     // 这是最核心的复杂查询，把搜索、过滤、分类、分页全部合并到一条 SQL 里。
@@ -84,7 +88,8 @@ interface VideoDao {
     // 被 HomeViewModel.loadFirstPage() / loadMore() / goToPage() 调用。
     @Query("""
         SELECT * FROM videos 
-        WHERE (:query IS NULL OR title LIKE '%' || :query || '%' ESCAPE '\' OR ownerName LIKE '%' || :query || '%' ESCAPE '\' OR CAST(avid AS TEXT) LIKE '%' || :query || '%' ESCAPE '\')
+        WHERE sourceAvailable = 1
+        AND (:query IS NULL OR title LIKE '%' || :query || '%' ESCAPE '\' OR ownerName LIKE '%' || :query || '%' ESCAPE '\' OR CAST(avid AS TEXT) LIKE '%' || :query || '%' ESCAPE '\')
         AND (:qualityFilter IS NULL OR quality LIKE '%' || :qualityFilter || '%')
         AND (:isPortrait IS NULL OR (CASE WHEN height > width THEN 1 ELSE 0 END) = :isPortrait)
         AND (:minDuration IS NULL OR duration >= :minDuration)
@@ -132,11 +137,45 @@ interface VideoDao {
     @Query("DELETE FROM videos WHERE categoryId = :categoryId")
     suspend fun deleteVideosByCategory(categoryId: Long)
 
-    @Query("SELECT COUNT(*) FROM videos WHERE categoryId = :categoryId")
+    @Query("SELECT COUNT(*) FROM videos WHERE categoryId = :categoryId AND sourceAvailable = 1")
     suspend fun getVideoCountByCategory(categoryId: Long): Int
-
     @Query("DELETE FROM videos")
     suspend fun deleteAllVideos()
+
+    @Query("UPDATE videos SET sourceAvailable = 1, sourceLastSeenAt = :scanTimestamp WHERE path IN (:paths)")
+    suspend fun markSourcesSeen(paths: List<String>, scanTimestamp: Long)
+
+    @Query("UPDATE videos SET sourceAvailable = 1, sourceLastSeenAt = :scanTimestamp WHERE path = :path")
+    suspend fun markSourceSeen(path: String, scanTimestamp: Long)
+
+    @Query("UPDATE videos SET sourceAvailable = 0 WHERE path LIKE :directoryPrefix || '%' AND sourceLastSeenAt < :scanTimestamp")
+    suspend fun markSourcesMissingInDirectory(directoryPrefix: String, scanTimestamp: Long)
+
+    @Query("DELETE FROM videos WHERE sourceAvailable = 0 AND exportedPath IS NULL")
+    suspend fun deleteMissingUnexportedVideos()
+
+    @Query("SELECT path FROM videos WHERE path LIKE :directoryPrefix || '%' AND sourceAvailable = 1")
+    suspend fun getAvailableSourcePathsInDirectory(directoryPrefix: String): List<String>
+
+    /** Atomically applies a successful scan so an app/process interruption cannot leave half a sync. */
+    @Transaction
+    suspend fun syncCacheDirectory(
+        directoryPrefix: String,
+        videos: List<VideoEntity>,
+        seenPaths: List<String>,
+        scanTimestamp: Long,
+        allowMissingSourceReconciliation: Boolean
+    ) {
+        if (videos.isNotEmpty()) insertVideos(videos)
+        seenPaths.chunked(800).forEach { paths -> markSourcesSeen(paths, scanTimestamp) }
+        if (allowMissingSourceReconciliation) {
+            markSourcesMissingInDirectory(directoryPrefix, scanTimestamp)
+            deleteMissingUnexportedVideos()
+        }
+    }
+
+    @Query("SELECT * FROM videos WHERE exportedPath IS NOT NULL")
+    suspend fun getExportedVideosOnce(): List<VideoEntity>
 
     // 获取所有已导出为 MP4 的视频
     @Query("SELECT * FROM videos WHERE exportedPath IS NOT NULL ORDER BY addedAt DESC")

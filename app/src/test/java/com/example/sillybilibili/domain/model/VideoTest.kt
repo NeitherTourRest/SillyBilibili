@@ -102,6 +102,18 @@ class VideoTest {
         assertFalse(video.isVertical) // height (0) > width (0) is false
     }
 
+    @Test
+    fun `preview aspect ratio uses portrait frame for vertical videos`() {
+        val video = Video(avid = 1, cid = 1, title = "", path = "", audioPath = "", size = 0, duration = 0, width = 720, height = 1280)
+        assertEquals(3f / 4f, video.previewAspectRatio, 0.001f)
+    }
+
+    @Test
+    fun `preview aspect ratio uses landscape frame for horizontal videos`() {
+        val video = Video(avid = 1, cid = 1, title = "", path = "", audioPath = "", size = 0, duration = 0, width = 1920, height = 1080)
+        assertEquals(16f / 10f, video.previewAspectRatio, 0.001f)
+    }
+
     // ── resolutionLabel ────────────────────────────────────────
 
     @Test
@@ -136,5 +148,16 @@ class VideoTest {
         assertNull(video.coverPath)
         assertNull(video.exportedPath)
         assertTrue(video.addedAt > 0)
+    }
+
+    @Test
+    fun `display cover uses source until cache is ready`() {
+        val video = Video(
+            avid = 1, cid = 2, title = "Test", path = "/video.m4s", audioPath = "/audio.m4s",
+            size = 1, duration = 1, coverSourcePath = "content://cache/cover.jpg"
+        )
+
+        assertEquals("content://cache/cover.jpg", video.displayCoverPath)
+        assertEquals("/local/cover.jpg", video.copy(coverPath = "/local/cover.jpg").displayCoverPath)
     }
 }

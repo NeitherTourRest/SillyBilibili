@@ -22,21 +22,20 @@ import com.example.sillybilibili.ui.theme.*
 @Composable
 fun CategoryCard(category: Category, onClick: () -> Unit, onEditClick: () -> Unit, onDeleteClick: () -> Unit, modifier: Modifier = Modifier) {
     val catColor = Color(category.color)
-    Card(modifier = modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(0.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    Card(modifier = modifier.fillMaxWidth().clickable(onClick = onClick), shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = DarkCard), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(GlassHighlight, catColor.copy(alpha = 0.52f), DarkDivider)))
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.width(4.dp).height(48.dp).clip(RoundedCornerShape(0.dp)).background(catColor))
-            Spacer(modifier = Modifier.width(16.dp))
-            Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(0.dp)).background(catColor.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(catColor.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
                 Text(category.name.take(1), style = MaterialTheme.typography.titleMedium, color = catColor, fontWeight = FontWeight.Bold)
             }
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                Text(category.name, style = MaterialTheme.typography.titleSmall, color = Color(0xFFF0F0F8), fontWeight = FontWeight.SemiBold)
-                Text("${category.videoCount} videos", style = MaterialTheme.typography.labelMedium, color = catColor.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace)
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(category.name, style = MaterialTheme.typography.titleSmall, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold)
+                Text("${category.videoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
             }
-            IconButton(onClick = onEditClick) { Icon(Icons.Default.Edit, "Edit", tint = Color(0xFF606080)) }
-            IconButton(onClick = onDeleteClick) { Icon(Icons.Default.Delete, "Delete", tint = NeonRed) }
+            IconButton(onClick = onEditClick) { Icon(Icons.Default.Edit, "编辑", tint = DarkTextSecondary) }
+            IconButton(onClick = onDeleteClick) { Icon(Icons.Default.Delete, "删除", tint = NeonRed.copy(alpha = 0.8f)) }
         }
     }
 }
@@ -45,12 +44,12 @@ fun CategoryCard(category: Category, onClick: () -> Unit, onEditClick: () -> Uni
 fun ColorPicker(selectedColor: Color, onColorSelected: (Color) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         CategoryColors.forEach { color ->
-            Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(0.dp))
+            Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
                 .background(if (color == selectedColor) color else color.copy(alpha = 0.4f))
                 .clickable { onColorSelected(color) }, contentAlignment = Alignment.Center
             ) {
                 if (color == selectedColor) {
-                    Box(modifier = Modifier.size(14.dp).clip(RoundedCornerShape(0.dp)).background(Color.White.copy(alpha = 0.5f)))
+                    Box(modifier = Modifier.size(14.dp).clip(RoundedCornerShape(7.dp)).background(Color.White.copy(alpha = 0.75f)))
                 }
             }
         }

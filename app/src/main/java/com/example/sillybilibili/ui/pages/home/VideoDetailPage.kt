@@ -33,7 +33,7 @@ import com.example.sillybilibili.ui.theme.*
 fun VideoDetailPage(
     videoId: Long,
     onNavigateBack: () -> Unit,
-    onNavigateToPlayer: (String, String) -> Unit,
+    onNavigateToPlayer: (Long, String, String, String?) -> Unit,
     viewModel: VideoDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -80,10 +80,10 @@ fun VideoDetailPage(
                             .fillMaxWidth()
                             .height(280.dp)
                     ) {
-                        if (video.coverPath != null) {
+                        if (video.displayCoverPath != null) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data(video.coverPath)
+                                    .data(video.displayCoverPath)
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = null,
@@ -196,11 +196,23 @@ fun VideoDetailPage(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
+                    Button(
+                        onClick = { onNavigateToPlayer(video.id, video.path, video.title, video.audioPath) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberVermilion),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("直接播放缓存", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     if (video.exportedPath != null && uiState.conversionProgress == null) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = DarkCard),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(0.dp)
+                            shape = MaterialTheme.shapes.large
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -213,9 +225,9 @@ fun VideoDetailPage(
                                     Text("Exported", style = MaterialTheme.typography.labelMedium, color = NeonGreen, fontWeight = FontWeight.Bold)
                                 }
                                 Button(
-                                    onClick = { onNavigateToPlayer(video.exportedPath!!, video.title) },
+                                    onClick = { onNavigateToPlayer(video.id, video.exportedPath!!, video.title, null) },
                                     colors = ButtonDefaults.buttonColors(containerColor = CyberGold),
-                                    shape = RoundedCornerShape(0.dp)
+                                    shape = MaterialTheme.shapes.medium
                                 ) {
                                     Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
@@ -230,7 +242,7 @@ fun VideoDetailPage(
                         ConversionStatusView(
                             status = progress.status,
                             progress = progress.progress,
-                            message = progress.outputPath ?: progress.errorMessage,
+                            message = progress.statusMessage ?: progress.outputPath ?: progress.errorMessage,
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
 
@@ -238,10 +250,10 @@ fun VideoDetailPage(
                             Spacer(modifier = Modifier.height(12.dp))
                             if (progress.status == ConversionStatus.COMPLETED && progress.outputPath != null) {
                                 Button(
-                                    onClick = { onNavigateToPlayer(progress.outputPath!!, video.title) },
+                                    onClick = { onNavigateToPlayer(video.id, progress.outputPath!!, video.title, null) },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = CyberGold),
-                                    shape = RoundedCornerShape(0.dp)
+                                    shape = MaterialTheme.shapes.medium
                                 ) {
                                     Icon(Icons.Default.PlayArrow, null, tint = Color.Black)
                                     Spacer(Modifier.width(8.dp))
@@ -281,7 +293,7 @@ fun VideoDetailPage(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp)
                                     .height(52.dp),
-                                shape = RoundedCornerShape(0.dp)
+                                shape = MaterialTheme.shapes.medium
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -345,7 +357,7 @@ fun VideoDetailPage(
         AlertDialog(
             onDismissRequest = { showOutputDirDialog = false },
             containerColor = DarkSurface,
-            shape = RoundedCornerShape(0.dp),
+            shape = MaterialTheme.shapes.large,
             title = {
                 Text(
                     "Output Directory",
@@ -357,7 +369,7 @@ fun VideoDetailPage(
                 OutlinedTextField(
                     value = outputDir,
                     onValueChange = { outputDir = it },
-                    shape = RoundedCornerShape(0.dp),
+                    shape = MaterialTheme.shapes.medium,
                     label = {
                         Text(
                             "Output path",
@@ -386,7 +398,7 @@ fun VideoDetailPage(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = CyberVermilion
                     ),
-                    shape = RoundedCornerShape(0.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Text(
                         "Convert",
@@ -414,7 +426,7 @@ private fun InfoChip(
     label: String
 ) {
     Surface(
-        shape = RoundedCornerShape(0.dp),
+        shape = RoundedCornerShape(10.dp),
         color = DarkCard
     ) {
         Row(

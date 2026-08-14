@@ -156,6 +156,21 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `deleteVideo reloads the displayed page after removing the record`() = runTest {
+        val video = Video(id = 1, avid = 1, cid = 2, title = "T", path = "/v", audioPath = "/a", size = 1, duration = 1)
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(0), any()) } returnsMany listOf(listOf(video), emptyList())
+
+        advanceUntilIdle()
+        assertEquals(listOf(video), viewModel.uiState.value.videos)
+
+        viewModel.deleteVideo(video)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.videos.isEmpty())
+        coVerify(exactly = 2) { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(0), any()) }
+    }
+
+    @Test
     fun `clearError clears errorMessage`() = runTest {
         viewModel.clearError()
         advanceUntilIdle()

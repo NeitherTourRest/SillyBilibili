@@ -23,6 +23,7 @@ package com.example.sillybilibili.service;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
 
 // IShellService.Stub — Shizuku AIDL 接口的实现类
 // AIDL = Android Interface Definition Language
@@ -61,6 +62,30 @@ public class ShellService extends IShellService.Stub {
             return result.isEmpty() ? error.toString().trim() : result;
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    /**
+     * Random-access byte reads for Media3. Keeping each response below Binder's transaction
+     * limit lets the player seek and buffer an isolated cache file without copying it to MP4.
+     */
+    @Override
+    public byte[] readFileRange(String path, long offset, int length) {
+        if (path == null || offset < 0 || length <= 0) return new byte[0];
+        int safeLength = Math.min(length, 256 * 1024);
+        try (RandomAccessFile file = new RandomAccessFile(path, "r")) {
+            if (offset >= file.length()) return new byte[0];
+            file.seek(offset);
+            int readable = (int) Math.min((long) safeLength, file.length() - offset);
+            byte[] result = new byte[readable];
+            int read = file.read(result);
+            if (read <= 0) return new byte[0];
+            if (read == result.length) return result;
+            byte[] trimmed = new byte[read];
+            System.arraycopy(result, 0, trimmed, 0, read);
+            return trimmed;
+        } catch (Exception ignored) {
+            return new byte[0];
         }
     }
 

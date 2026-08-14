@@ -57,6 +57,13 @@ data class VideoEntity(
     val duration: Long,          // 时长（毫秒）
     val categoryId: Long? = null,// 所属分类 ID
     val coverPath: String? = null,// 封面缓存路径
+    val coverSourcePath: String? = null, // 原始封面路径；首屏需要时才复制进缓存
     val addedAt: Long = System.currentTimeMillis(),  // 添加时间
-    val exportedPath: String? = null  // 导出后的 .mp4 路径（null=未导出）
+    val exportedPath: String? = null,  // 导出后的 .mp4 路径（null=未导出）
+    val sourceAvailable: Boolean = true,
+    val sourceLastSeenAt: Long = 0L,
+    val exportedSize: Long = 0L,
+    val exportedLastModified: Long = 0L,
+    val onlineStatus: String = "UNCHECKED",
+    val onlineCheckedAt: Long = 0L
 )

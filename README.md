@@ -1,281 +1,152 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Android-8.0+-34A853?logo=android" />
-  <img src="https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin" />
-  <img src="https://img.shields.io/badge/Compose-BOM_2024.02-4285F4?logo=jetpackcompose" />
-  <img src="https://img.shields.io/badge/Shizuku-13.1.5-blueviolet" />
-  <img src="https://img.shields.io/badge/Media3-ExoPlayer-FF6F00" />
-</p>
+# Silly Bilibili
 
-<h1 align="center">⚡ SILLY BILIBILI</h1>
+面向本地 B 站缓存的 Android 管理器：扫描、播放、整理并导出缓存视频。界面采用 Jetpack Compose 构建，支持简体中文与英文。
 
-<p align="center">
-  <strong>B 站缓存视频管理 & MP4 转换工具</strong>
-  <br />
-  赛博朋克风格的 Android 应用，浏览、搜索、过滤、转换 B 站离线缓存视频
-  <br /><br />
-  <em>Jetpack Compose · Shizuku · Material 3 · ExoPlayer</em>
-</p>
+> 本项目只处理设备中已存在的本地缓存；不提供下载、绕过 DRM 或账号相关能力。
 
----
-
-## 功能
+## 功能一览
 
 | 功能 | 说明 |
 |---|---|
-| 📂 **视频浏览** | 扫描 B 站缓存目录，展示封面、标题、UP 主、画质、时长、大小 |
-| 🏷️ **分类管理** | 自定义分类，按颜色标记，视频归类整理 |
-| 🔍 **全文搜索** | 按标题、UP 主名、av 号模糊搜索，300ms 防抖 |
-| 🎯 **多维过滤** | 按画质（360P~4K）、横竖屏、时长、文件大小、扫描时间、有无封面筛选 |
-| 🔄 **MP4 转换** | 将分离的 video.m4s + audio.m4s 合并为标准 MP4（remux，不重新编码，无损） |
-| 🎬 **视频播放** | ExoPlayer（AndroidX Media3）内置播放器，支持手势亮度/音量、双击快进快退、倍速、锁定 |
-| 📼 **导出管理** | 独立的"已转换"页面，查看所有 MP4，一键播放或删除 |
-| 📱 **Shizuku 集成** | 无需 Root，通过 Shizuku 访问 Android 11+ 受保护的 `/Android/data/` 目录 |
-| 📁 **SAF 选择器** | 在 Android 10 及以下可选择 B 站缓存目录（Android 11+ 系统隐藏了 Android/data/） |
-| 🎨 **赛博朋克 UI** | 深色主题 + 霓虹粉/金/紫配色，Material 3 设计 |
+| 缓存扫描 | 解析 `entry.json`、分辨率、时长、画质、视频/音频轨与封面。扫描中断会保留进度和提示。 |
+| 多种访问方式 | 未隔离目录直接读取；隔离目录通过 Shizuku；Android 10 及以下可使用 SAF 系统目录选择器。 |
+| 封面回退 | 优先使用缓存中的 cover 文件；没有时从视频抽帧生成预览。 |
+| 管理与搜索 | 搜索、分类、多维过滤、无限滚动加载、右侧快速滑动条。 |
+| 直接播放 | Media3/ExoPlayer 直接播放导出的 MP4 或缓存的 `video.m4s + audio.m4s`，无需先转换。 |
+| 播放队列 | 从当前筛选结果选集、上一/下一条、倍速、全屏与定时停止播放。 |
+| 全屏切换 | 全屏上下滑动可跟手切换相邻视频；未过阈值回弹，切换时自动继续播放。 |
+| 后台播放 | 设置中可开关。启用后退出播放页仍继续播放，底部迷你播放器可返回或关闭。 |
+| MP4 导出 | 使用 `MediaExtractor` + `MediaMuxer` 重封装，不重新编码；显示后台转换进度。 |
+| 已导出同步 | 检测文件管理器中对已导出 MP4 的删除或变更，并更新应用列表。 |
+| 线上状态 | 可显示“在线 / 已下架或不可访问 / 暂无法核验 / 待核验”，设置中可手动刷新全部状态。 |
 
-### 它能做什么
+## 使用前：选择正确的缓存访问方式
 
-B 站将缓存视频拆分为视频流（`video.m4s`）和音频流（`audio.m4s`）两个独立文件，存储在 `Android/data/tv.danmaku.bili/download/` 下，普通 App 无法访问。Silly Bilibili 做的事情：
+默认缓存目录通常位于：
 
-1. **扫描** — 通过 Shizuku 以 shell 权限浏览 B 站缓存目录
-2. **解析** — 读取 `entry.json` 元数据：标题、UP 主、画质、分辨率、时长
-3. **管理** — 分类、搜索、过滤、分页浏览
-4. **转换** — 用 Android 原生 `MediaExtractor` + `MediaMuxer` 将 m4s 双流 remux 为标准 MP4
-5. **播放** — 内置 ExoPlayer 直接播放转换后的 MP4
+```text
+/storage/emulated/0/Android/data/tv.danmaku.bili/download/
+```
 
----
-
-## 环境要求
-
-| 项目 | 要求 |
+| 设备情况 | 应使用的方式 |
 |---|---|
-| **Android** | 8.0+（API 26+） |
-| **Shizuku** | v13+（[下载](https://shizuku.rikka.app/download/)） |
-| **B 站 App** | 已安装并有缓存视频 |
-| **存储空间** | ~200MB（App + 缓存 + 转换输出） |
+| 目录可被普通文件 API 读取 | 直接扫描，不需要 Shizuku。 |
+| Android 11+，`Android/data` 被系统隔离 | 配置并授权 Shizuku。 |
+| Android 10 及以下，且系统文件选择器允许进入目录 | 可在扫描页选择 SAF 目录，无需 Shizuku。 |
 
-> ⚠️ Android 11+ 必须安装 Shizuku 才能读取 B 站的 `/Android/data/` 缓存目录。SAF 系统文件选择器在 Android 11+ 不能访问该目录（Google 平台限制）。
+Android 11 及以上的系统文件选择器通常不能授予 `Android/data` 访问权限；遇到这种情况请使用 Shizuku。扫描页会显示当前检测到的可用通道。
 
----
+## Shizuku 接入
 
-## 快速开始
+Shizuku 让应用通过 Android shell 权限读取系统隔离的缓存目录；它不是 Root，也不需要解锁设备。
 
-### 1. 安装 Shizuku
+1. 从 [Shizuku 官网](https://shizuku.rikka.app/download/) 或其 [GitHub Releases](https://github.com/RikkaApps/Shizuku/releases) 安装 Shizuku。
+2. 在 Shizuku 中启动服务：Android 11+ 通常可选择“无线调试”，按系统提示完成配对与启动；也可按 Shizuku 自身说明使用电脑启动。
+3. 打开 Silly Bilibili，接受 Shizuku 授权弹窗。
+4. 进入“扫描”，确认状态显示 Shizuku 已连接，再选择或确认 B 站缓存目录并开始扫描。
 
-从 [GitHub Releases](https://github.com/RikkaApps/Shizuku/releases) 或 [Google Play](https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api) 下载。
+常见排查：
 
-### 2. 启动 Shizuku
+- 重启手机后 Shizuku 服务可能需要重新启动。
+- 如果授权过期，在 Shizuku 中撤销后重新打开本应用授权。
+- 出现“目录不可读取”时，先确认 B 站确实已缓存内容，再检查 Shizuku 状态和扫描页提示。
+- 应用会优先使用直接读取；只有目录被隔离时才回退到 Shizuku。
 
-- 打开 Shizuku App
-- 选择「通过无线调试启动」（Android 11+ 无需电脑）
-- 按提示操作，确认状态显示「正在运行」
+## 日常使用
 
-### 3. 安装 Silly Bilibili
+1. 在 B 站中完成离线缓存。
+2. 打开本应用的“扫描”页，确认访问方式后执行扫描；可按视频方向、时长、大小等条件限定扫描范围。
+3. 在首页搜索、筛选或长按视频进行分类管理。
+4. 点按视频卡片直接进入播放器；播放页可以选集、调整倍速、设置停止定时器，或将原始缓存转换为 MP4。
+5. 转换完成后，在“已导出”页播放或管理 MP4；该页会同步外部删除与变更。
 
-```bash
-git clone https://github.com/NeitherTourRest/Videos-Manager-for-B.git
-cd Videos-Manager-for-B
-./gradlew assembleRelease
-```
+### 播放器手势与布局
 
-APK 位置：`app/build/outputs/apk/release/app-release.apk`
+- 点按视频画面：显示或隐藏控制栏。
+- 非全屏：横屏、方形与竖屏视频按实际解码尺寸适配；竖屏会采用更高的观看区并保留必要黑边。
+- 全屏：点击全屏按钮进入；上下拖动可跟手预览并切换播放队列中的上一/下一条。拖动不足约 20% 屏高会回弹。
+- 后台播放：在“设置”中开启。离开播放页后，通过底部迷你播放器返回，或使用其关闭按钮结束播放。
 
-### 4. 首次启动
+### 线上状态含义
 
-1. 授予「所有文件访问权限」
-2. 授予 Shizuku 权限
-3. 进入 **Settings**（顶部齿轮图标）
-4. 点击 **Scan for Videos** 扫描 B 站缓存
-
----
-
-## 使用指南
-
-### 视频管理
-
-| 操作 | 方式 |
+| 状态 | 含义 |
 |---|---|
-| 查看详情 | 点击视频卡片 |
-| 右键菜单 | 长按视频卡片 |
-| 分配分类 | 长按 → 分配分类 |
-| 转换 MP4 | 进入详情页 → Convert to MP4 |
-| 删除视频 | 长按 → 删除 |
-| 已转换列表 | 顶部栏文件夹图标 → 查看/播放/删除所有 MP4 |
+| 在线 | 已根据缓存中的 AV/BV 关联信息成功访问线上视频。 |
+| 已下架/不可访问 | 线上接口明确返回不可访问；也可能是权限、地区或仅自己可见造成。 |
+| 暂无法核验 | 网络、接口响应或缓存元数据不足导致本次无法得出结论，不等同于视频下架。 |
+| 待核验 | 尚未请求线上状态。 |
 
-### 搜索 & 过滤
+## 构建
 
-- **搜索**：顶部搜索栏输入 — 匹配标题、UP 主名、av 号
-- **过滤**：点击漏斗图标 — 选择条件后点「确认」应用
-- **分类**：点击分类标签只显示该分类视频
-- **重置**：过滤面板内点「重置」清空草稿，再点「确认」生效
+要求：JDK 17、Android SDK（compile SDK 34）。
 
-### 播放器
+```powershell
+# 复制本地签名配置模板后，只在本机填写实际值
+Copy-Item keystore.properties.example keystore.properties
 
-- **亮度/音量**：左侧竖滑调亮度，右侧竖滑调音量
-- **快进快退**：双击左侧 -10s，双击右侧 +10s
-- **倍速**：顶栏 1.0x 按钮循环切换 0.5x / 1.0x / 1.5x / 2.0x
-- **锁定**：锁定后禁用所有触控，防止误操作
-- **返回**：左上角箭头
+# 运行单元测试
+.\gradlew.bat testDebugUnitTest --no-daemon
 
-### 分页
-
-- 列表每页 **20 条**
-- 底部 **< Prev / Next >** 翻页
-- **LOAD ALL** 加载全部
-
----
-
-## B 站缓存结构
-
-```
-/storage/emulated/0/Android/data/tv.danmaku.bilibili/download/
-└── {avid}/                          ← av 号目录
-    └── c_{cid}/                     ← 分 P 目录
-        ├── entry.json               ← 视频元数据（标题、画质、分辨率等）
-        ├── {type_tag}/              ← 画质标签（如 80 = 1080P）
-        │   ├── video.m4s            ← H.264 视频流
-        │   ├── audio.m4s            ← AAC 音频流
-        │   └── index.json           ← 流索引
-        ├── cover.jpg                ← 封面图
-        └── danmaku.xml              ← 弹幕文件
+# 构建签名 APK
+.\gradlew.bat assembleRelease --no-daemon
 ```
 
----
+输出 APK：`app/build/outputs/apk/release/app-release.apk`
 
-## MP4 转换原理
+`keystore.properties` 与 keystore 文件均被 Git 忽略，绝不能提交到仓库。示例配置：
 
-```
-video.m4s ──┐
-             ├── Shizuku shell 复制 → App 缓存目录
-audio.m4s ──┘
-                  │
-                  ▼
-           MediaExtractor 分别读取视频/音频轨
-                  │
-                  ▼
-           检测 track（video/avc, audio/mp4a）
-                  │
-                  ▼
-           MediaMuxer 按时间戳交错写入 → output.mp4
-                  │
-                  ▼
-            标准 MP4 文件（任意播放器可播）
+```properties
+storeFile=key
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+keyPassword=YOUR_KEY_PASSWORD
 ```
 
-> 转换是 **remux（重封装）而非重新编码**。不经过解码器，画质/音质无任何损失。速度约 1~3 秒/分钟视频。
+## 缓存与导出原理
 
----
+典型缓存结构：
 
-## 技术架构
-
-```
-┌─────────────────────────────────────────────────────┐
-│  UI 层 (Jetpack Compose)                             │
-│  HomePage · VideoDetailPage · ExportedPage          │
-│  PlayerPage · CategoriesPage · SettingsPage          │
-├─────────────────────────────────────────────────────┤
-│  ViewModel 层 (Hilt + StateFlow)                     │
-│  管理 UiState，调用 Repository，响应 Flow 变化       │
-├─────────────────────────────────────────────────────┤
-│  Domain 层 (纯 Kotlin)                               │
-│  Video · Category · ConversionProgress · Repository  │
-├─────────────────────────────────────────────────────┤
-│  Data 层                                             │
-│  Room (SQLite) · VideoDao · CategoryDao              │
-│  RepositoryImpl (Entity ↔ Domain 映射)               │
-├─────────────────────────────────────────────────────┤
-│  Service 层                                          │
-│  VideoScanService    — 扫描 B 站缓存目录             │
-│  VideoConverterService — m4s → mp4 remux            │
-│  SettingsService     — SharedPreferences 封装        │
-│  ShellService.java   — Shizuku AIDL Shell 执行器     │
-├─────────────────────────────────────────────────────┤
-│  Util 层                                             │
-│  ShizukuFileHelper — shell ls/cat/stat/dd + base64  │
-└─────────────────────────────────────────────────────┘
+```text
+download/
+└── {avid}/
+    └── c_{cid}/
+        ├── entry.json       # 标题、UP 主、分辨率、时长等元数据
+        ├── {quality}/
+        │   ├── video.m4s
+        │   ├── audio.m4s
+        │   └── index.json
+        ├── cover.jpg
+        └── danmaku.xml / danmaku.pb
 ```
 
-### 关键设计决策
+导出 MP4 使用 Android 原生 `MediaExtractor` 读取音视频轨，再交由 `MediaMuxer` 按时间戳写入 MP4。该过程是重封装（remux），不重新编码，因此不会额外损失画质或音质。
 
-| 决策 | 理由 |
-|---|---|
-| **Shizuku 而非 Root** | 无需解锁设备，支持所有 Android 11+ 手机 |
-| **AIDL UserService** | Shizuku `newProcess()` 在 Android 13 已废弃，AIDL 是官方推荐方案 |
-| **Android MediaMuxer** | 省去 FFmpeg（28MB+），用系统内置 MP4 muxer 零拷贝 remux |
-| **dd + base64 分块** | Binder 事务缓冲区 1MB 限制，512KB 分块读取避免溢出 |
-| **Room + Flow** | 响应式数据层，数据库变化自动刷新 UI |
-| **ExoPlayer (Media3)** | 自带手势控制、编解码支持广泛，替代手写 MediaPlayer |
+## 架构
 
----
-
-## 项目结构
-
-```
-app/src/main/java/com/example/sillybilibili/
-├── SillyBilibiliApp.kt          Application（Hilt 入口）
-├── MainActivity.kt              入口 + 权限请求
-├── di/                          Hilt 依赖注入模块
-├── data/
-│   ├── local/
-│   │   ├── dao/                 Room DAO（VideoDao, CategoryDao）
-│   │   ├── entity/              Room 实体（VideoEntity, CategoryEntity）
-│   │   └── AppDatabase.kt       Room 数据库 + 迁移（v1→v4）
-│   └── repository/              Repository 实现
-├── domain/
-│   ├── model/                   数据模型（Video, Category, ConversionProgress）
-│   └── repository/              Repository 接口
-├── service/
-│   ├── VideoScanService.kt      缓存目录扫描器（批处理 + 并行）
-│   ├── VideoConverterService.kt MP4 转换引擎（remux）
-│   ├── SettingsService.kt       用户偏好设置
-│   └── ShellService.java        Shizuku AIDL Shell 执行
-├── ui/
-│   ├── components/              可复用组件
-│   │   ├── VideoCard.kt         视频卡片
-│   │   ├── FilterSheet.kt       过滤面板（6 维过滤 + 确认/重置）
-│   │   ├── SearchBar.kt         搜索栏
-│   │   ├── VideoContextMenu.kt  长按菜单
-│   │   └── ConversionStatusView.kt 转换进度
-│   ├── pages/
-│   │   ├── home/                首页 + 视频列表 + 详情
-│   │   ├── player/              ExoPlayer 播放器
-│   │   ├── exported/            已转换 MP4 管理
-│   │   ├── categories/          分类管理
-│   │   ├── scan/                扫描页面
-│   │   ├── guide/               引导页
-│   │   └── settings/            设置页
-│   └── theme/                   颜色、字体、主题
-└── util/
-    └── ShizukuFileHelper.kt     特权文件 I/O（ls/stat/cat/cp/dd/base64）
+```text
+ui (Compose) → ViewModel (StateFlow) → domain repository → data (Room)
+                                      ↘ service（扫描、播放、转换、Shizuku、外部同步）
 ```
 
----
+- UI：Jetpack Compose + Material 3
+- 数据：Room + Flow
+- 依赖注入：Hilt
+- 异步：Kotlin Coroutines
+- 播放：AndroidX Media3 / ExoPlayer / MediaSession
+- 图像：Coil
+- 特权文件访问：Shizuku AIDL UserService
 
-## 依赖库
+## 版本与文档维护
 
-| 库 | 用途 |
-|---|---|
-| Jetpack Compose (BOM 2024.02) | 声明式 UI 框架 |
-| Material 3 | 设计系统 |
-| Material Icons Extended | 扩展图标集 |
-| Room (2.6.1) | 本地 SQLite + Flow |
-| Hilt (2.48.1) | 依赖注入 |
-| Navigation Compose | 类型安全路由 |
-| Coil (2.5.0) | 图片加载 |
-| Media3 ExoPlayer (1.3.1) | 视频播放 |
-| Shizuku API (13.1.5) | 特权文件访问 |
+此仓库采用 Git 版本控制。每次功能、交互、权限、构建方式或使用步骤发生变化时：
 
----
+1. 同一批改动内更新本 README 的功能说明、操作步骤和限制。
+2. 运行与改动相称的测试，并构建 release APK。
+3. 使用清晰的 Conventional Commit 信息提交，并推送到 `origin/master`。
+4. 不提交 APK、keystore、密码、令牌、真实缓存视频或其他私密数据。
 
 ## 免责声明
 
-- 本应用**与 Bilibili 无关**，非官方产品
-- 所有缓存视频内容版权归原作者和 B 站所有
-- 转换功能仅合并已下载的缓存分片，**不破解任何 DRM**
-- 请遵守当地版权法律，合理使用
-
----
-
-<p align="center">
-  <sub>⚡ SILLY BILIBILI — 因为 B 站缓存，值得更好的管理</sub>
-</p>
+- 本应用与 Bilibili 无关，亦非官方产品。
+- 本地缓存内容的版权归原作者及权利人所有。
+- 请遵守所在地法律、平台规则与版权要求，仅处理有权使用的本地内容。

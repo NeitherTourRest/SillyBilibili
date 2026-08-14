@@ -19,16 +19,14 @@ class ThumbnailHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    // Extract frame at timeUs (default 1s) and save as JPEG in app cache.
+    // Cached Bilibili segments can begin after a sparse keyframe, so retry a few positions.
     fun extractFrame(videoPath: String, outputFile: File, timeUs: Long = 1_000_000L): Boolean {
         if (outputFile.exists()) return true
         outputFile.parentFile?.mkdirs()
         return try {
             MediaMetadataRetriever().use { retriever ->
                 retriever.setDataSource(videoPath)
-                val frame = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    ?: retriever.frameAtTime
-                saveJpeg(frame, outputFile)
+                saveJpeg(firstAvailableFrame(retriever, timeUs), outputFile)
             }
         } catch (e: Exception) {
             false
@@ -42,9 +40,7 @@ class ThumbnailHelper @Inject constructor(
         return try {
             MediaMetadataRetriever().use { retriever ->
                 retriever.setDataSource(context, videoUri)
-                val frame = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    ?: retriever.frameAtTime
-                saveJpeg(frame, outputFile)
+                saveJpeg(firstAvailableFrame(retriever, timeUs), outputFile)
             }
         } catch (e: Exception) {
             false
@@ -53,16 +49,38 @@ class ThumbnailHelper @Inject constructor(
 
     private fun saveJpeg(bitmap: Bitmap?, outputFile: File): Boolean {
         if (bitmap == null) return false
+        val maxEdge = 640
+        val scale = maxOf(bitmap.width, bitmap.height).toFloat() / maxEdge
+        val preview = if (scale > 1f) {
+            Bitmap.createScaledBitmap(bitmap, (bitmap.width / scale).toInt(), (bitmap.height / scale).toInt(), true)
+        } else bitmap
         return try {
             FileOutputStream(outputFile).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                preview.compress(Bitmap.CompressFormat.JPEG, 85, out)
             }
             true
         } catch (e: Exception) {
             false
         } finally {
+            if (preview !== bitmap) preview.recycle()
             bitmap.recycle()
         }
+    }
+
+    private fun firstAvailableFrame(retriever: MediaMetadataRetriever, preferredTimeUs: Long): Bitmap? {
+        val durationUs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            ?.toLongOrNull()?.times(1_000L)
+        val candidates = buildList {
+            add(preferredTimeUs)
+            add(0L)
+            if (durationUs != null && durationUs > 0L) {
+                add(durationUs / 10L)
+                add(durationUs / 3L)
+            }
+        }.distinct().filter { durationUs == null || it <= durationUs }
+        return candidates.firstNotNullOfOrNull { timeUs ->
+            retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        } ?: retriever.frameAtTime
     }
 
     // Construct a child URI under a SAF tree URI.
