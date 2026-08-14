@@ -72,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -149,6 +150,7 @@ fun PlayerPage(
     var fullscreenSwipeOffsetPx by remember { mutableStateOf(0f) }
     var fullscreenViewportHeightPx by remember { mutableIntStateOf(0) }
     var isSettlingFullscreenSwipe by remember { mutableStateOf(false) }
+    var swipeWarmupIndex by remember { mutableIntStateOf(-1) }
 
     DisposableEffect(controllerFuture) {
         controllerFuture.addListener(
@@ -336,13 +338,14 @@ fun PlayerPage(
             // Start opening the selected source while the outgoing page is still animating.
             // The previous video remains fully interactive during a held drag; this only happens
             // after the user has released beyond the switch threshold.
+            viewModel.preloadSwipeTarget(targetIndex)
             viewModel.preloadAdjacent(targetIndex)
             controller?.seekToDefaultPosition(targetIndex)
             controller?.play()
             animate(
                 initialValue = fullscreenSwipeOffsetPx,
                 targetValue = outgoingOffset,
-                animationSpec = tween(durationMillis = 150)
+                animationSpec = tween(durationMillis = 120)
             ) { value, _ -> fullscreenSwipeOffsetPx = value }
 
             activeIndex = targetIndex
@@ -350,7 +353,7 @@ fun PlayerPage(
             animate(
                 initialValue = fullscreenSwipeOffsetPx,
                 targetValue = 0f,
-                animationSpec = tween(durationMillis = 220)
+                animationSpec = tween(durationMillis = 180)
             ) { value, _ -> fullscreenSwipeOffsetPx = value }
             isSettlingFullscreenSwipe = false
         }
@@ -406,7 +409,10 @@ fun PlayerPage(
                 .pointerInput(isFullscreen, activeIndex, fullscreenViewportHeightPx, isSettlingFullscreenSwipe) {
                     if (isFullscreen && fullscreenViewportHeightPx > 0) {
                         detectVerticalDragGestures(
-                            onDragStart = { controlsVisible = false },
+                            onDragStart = {
+                                controlsVisible = false
+                                swipeWarmupIndex = -1
+                            },
                             onVerticalDrag = { _, dragAmount ->
                                 if (!isSettlingFullscreenSwipe) {
                                     val proposedOffset = fullscreenSwipeOffsetPx + dragAmount
@@ -415,6 +421,14 @@ fun PlayerPage(
                                         itemCount = queue?.items?.size ?: 0,
                                         offsetPx = proposedOffset
                                     )
+                                    if (
+                                        adjacentIndex != null &&
+                                        swipeWarmupIndex != adjacentIndex &&
+                                        abs(proposedOffset) >= fullscreenViewportHeightPx * 0.02f
+                                    ) {
+                                        swipeWarmupIndex = adjacentIndex
+                                        viewModel.preloadSwipeTarget(adjacentIndex)
+                                    }
                                     fullscreenSwipeOffsetPx = if (adjacentIndex != null) {
                                         proposedOffset.coerceIn(
                                             -fullscreenViewportHeightPx.toFloat(),
@@ -453,6 +467,7 @@ fun PlayerPage(
                 positionMs = positionMs,
                 durationMs = durationMs,
                 playbackSpeed = playbackSpeed,
+                episodeLabel = "第 ${activeIndex + 1} / ${queue?.items?.size ?: 0} 集",
                 canGoPrevious = activeIndex > 0,
                 canGoNext = activeIndex < (queue?.items?.lastIndex ?: -1),
                 onBack = { if (isFullscreen) setFullscreen(false) else leavePlayer() },
@@ -593,6 +608,7 @@ private fun PlaybackControls(
     positionMs: Long,
     durationMs: Long,
     playbackSpeed: Float,
+    episodeLabel: String,
     canGoPrevious: Boolean,
     canGoNext: Boolean,
     onBack: () -> Unit,
@@ -602,46 +618,49 @@ private fun PlaybackControls(
     onSeek: (Float) -> Unit,
     onShowEpisodes: () -> Unit,
     onChangeSpeed: () -> Unit,
-    onToggleFullscreen: () -> Unit
+    onToggleFullscreen: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val overlayColor = Color(0xFF12131A).copy(alpha = if (isFullscreen) 0.82f else 0.76f)
+    val overlayColor = Color(0xE9121622).copy(alpha = if (isFullscreen) 0.92f else 0.86f)
 
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().zIndex(2f),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(24.dp),
             color = overlayColor,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder.copy(alpha = 0.9f))
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 3.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.11f), CircleShape)
+                    modifier = Modifier.size(42.dp).background(CyberVermilion.copy(alpha = 0.22f), CircleShape)
                 ) { Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White, modifier = Modifier.size(22.dp)) }
-                Text(
-                    text = title.ifBlank { "正在播放" },
-                    modifier = Modifier.weight(1f).padding(horizontal = 9.dp),
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                    Text(
+                        text = title.ifBlank { "正在播放" },
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(episodeLabel, color = Color.White.copy(alpha = 0.56f), style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
 
         Surface(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 0.dp, end = 12.dp, bottom = 10.dp),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(26.dp),
             color = overlayColor,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder.copy(alpha = 0.9f))
         ) {
             Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                 Row(
@@ -665,13 +684,13 @@ private fun PlaybackControls(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onPrevious, enabled = canGoPrevious, modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                    IconButton(onClick = onPrevious, enabled = canGoPrevious, modifier = Modifier.size(42.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "上一集", tint = Color.White.copy(alpha = if (canGoPrevious) 1f else 0.35f), modifier = Modifier.size(23.dp))
                     }
-                    IconButton(onClick = onTogglePlayback, modifier = Modifier.size(42.dp).background(CyberVermilion, CircleShape)) {
-                        Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(27.dp))
+                    IconButton(onClick = onTogglePlayback, modifier = Modifier.size(46.dp).background(CyberVermilion, CircleShape)) {
+                        Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(29.dp))
                     }
-                    IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                    IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(42.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
                         Icon(Icons.Default.SkipNext, contentDescription = "下一集", tint = Color.White.copy(alpha = if (canGoNext) 1f else 0.35f), modifier = Modifier.size(23.dp))
                     }
                     Spacer(Modifier.weight(1f))
@@ -738,7 +757,7 @@ internal fun fullscreenSwipeAdjacentIndex(
 }
 
 /** A short, intentional drag is enough to move through a short-video style queue. */
-internal const val FULLSCREEN_SWIPE_SWITCH_FRACTION = 0.12f
+internal const val FULLSCREEN_SWIPE_SWITCH_FRACTION = 0.07f
 
 internal fun fullscreenSwipeTargetIndex(
     activeIndex: Int,

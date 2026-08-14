@@ -52,6 +52,8 @@ class PlayerViewModel @Inject constructor(
     private var queue: PlaybackQueue? = null
     private var conversionObservation: Job? = null
     private var readAheadJob: Job? = null
+    private var swipeWarmupJob: Job? = null
+    private var swipeWarmupTargetIndex: Int? = null
 
     fun prepare(playbackQueue: PlaybackQueue) {
         queue = playbackQueue
@@ -67,6 +69,17 @@ class PlayerViewModel @Inject constructor(
         if (adjacentItems.isEmpty()) return
         readAheadJob = viewModelScope.launch {
             playbackReadAheadPreloader.preload(adjacentItems)
+        }
+    }
+
+    /** Starts a larger read-ahead as soon as a full-screen drag exposes a neighbouring item. */
+    fun preloadSwipeTarget(targetIndex: Int) {
+        val item = queue?.items?.getOrNull(targetIndex) ?: return
+        if (swipeWarmupTargetIndex == targetIndex && swipeWarmupJob?.isActive == true) return
+        swipeWarmupTargetIndex = targetIndex
+        swipeWarmupJob?.cancel()
+        swipeWarmupJob = viewModelScope.launch {
+            playbackReadAheadPreloader.preloadTransitionTarget(item)
         }
     }
 

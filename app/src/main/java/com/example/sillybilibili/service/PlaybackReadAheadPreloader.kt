@@ -27,6 +27,15 @@ class PlaybackReadAheadPreloader @Inject constructor(
         }
     }
 
+    /** Gives the video revealed by an in-progress full-screen swipe a larger, first-priority warmup. */
+    suspend fun preloadTransitionTarget(item: PlaybackQueueItem) = withContext(Dispatchers.IO) {
+        if (!shizukuHelper.isShizukuAvailable()) return@withContext
+        preloadPath(item.videoPath, TRANSITION_VIDEO_PRELOAD_BYTES)
+        item.audioPath?.takeIf { it.isNotBlank() }?.let { audioPath ->
+            preloadPath(audioPath, TRANSITION_AUDIO_PRELOAD_BYTES)
+        }
+    }
+
     private fun preloadPath(path: String, targetBytes: Int) {
         if (path.startsWith("content://") || File(path).isFile) return
         val length = readAheadCache.fileLength(path)
@@ -42,5 +51,7 @@ class PlaybackReadAheadPreloader @Inject constructor(
     private companion object {
         const val VIDEO_PRELOAD_BYTES = 256 * 1024
         const val AUDIO_PRELOAD_BYTES = 128 * 1024
+        const val TRANSITION_VIDEO_PRELOAD_BYTES = 768 * 1024
+        const val TRANSITION_AUDIO_PRELOAD_BYTES = 384 * 1024
     }
 }

@@ -7,17 +7,17 @@ import org.junit.Test
 class FullscreenSwipeTest {
     @Test
     fun `upward swipe beyond threshold opens the next video`() {
-        assertEquals(2, fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = -130f, viewportHeightPx = 1_000))
+        assertEquals(2, fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = -80f, viewportHeightPx = 1_000))
     }
 
     @Test
     fun `downward swipe beyond threshold opens the previous video`() {
-        assertEquals(0, fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = 130f, viewportHeightPx = 1_000))
+        assertEquals(0, fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = 80f, viewportHeightPx = 1_000))
     }
 
     @Test
     fun `short drag springs back without switching`() {
-        assertNull(fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = -110f, viewportHeightPx = 1_000))
+        assertNull(fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = -60f, viewportHeightPx = 1_000))
     }
 
     @Test
