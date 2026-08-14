@@ -330,15 +330,45 @@ private fun ScanProgressCard(state: ScanUiState) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Refresh, null, tint = CyberGold, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(progress.statusMessage, color = CyberGold, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("${(progress.processedFolders * 100 / progress.totalFolders.coerceAtLeast(1))}%", color = CyberGold, style = MaterialTheme.typography.labelLarge)
+                Column(Modifier.weight(1f)) {
+                    Text(progress.step.label, color = CyberGold, fontWeight = FontWeight.Bold)
+                    Text(progress.statusMessage, color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Text("${(progress.overallProgress * 100).toInt()}%", color = CyberGold, style = MaterialTheme.typography.labelLarge)
             }
             LinearProgressIndicator(
-                progress = { progress.processedFolders.toFloat() / progress.totalFolders.coerceAtLeast(1) },
+                progress = { progress.overallProgress },
                 modifier = Modifier.fillMaxWidth().height(7.dp),
                 color = CyberVermilion,
                 trackColor = DarkSurfaceVariant
             )
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                VideoScanService.ScanStep.values().asList()
+                    .filter { it != VideoScanService.ScanStep.FINISHED }
+                    .forEach { step ->
+                        val isCurrent = step == progress.step
+                        val isDone = step.ordinal < progress.step.ordinal
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = when {
+                                isCurrent -> CyberVermilion.copy(alpha = .20f)
+                                isDone -> NeonGreen.copy(alpha = .13f)
+                                else -> DarkSurfaceVariant
+                            }
+                        ) {
+                            Text(
+                                text = step.label,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = when {
+                                    isCurrent -> CyberVermilion
+                                    isDone -> NeonGreen
+                                    else -> DarkTextTertiary
+                                },
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 ProgressDetail("目标", progress.totalFolders)
                 ProgressDetail("已处理", progress.processedFolders)
@@ -346,6 +376,15 @@ private fun ScanProgressCard(state: ScanUiState) {
                 ProgressDetail("跳过", progress.skippedFolders)
             }
             if (progress.filteredFolders > 0) Text("已按筛选条件排除 ${progress.filteredFolders} 个缓存包", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+            if (progress.step == VideoScanService.ScanStep.RECONCILING_HISTORY) {
+                val message = when {
+                    progress.reconciliationPerformed && progress.unavailableSourceCount > 0 ->
+                        "已确认 ${progress.unavailableSourceCount} 个历史源文件不存在：未导出的记录将移除，已导出 MP4 会保留。"
+                    progress.reconciliationPerformed -> "历史扫描记录已安全核对，未发现缺失源文件。"
+                    else -> "本次不会清理历史记录，避免筛选扫描或不完整读取造成误判。"
+                }
+                Text(message, color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
@@ -373,6 +412,16 @@ private fun ScanResultCard(state: ScanUiState, onRetry: () -> Unit, onNavigateTo
                 Text(message, color = color, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             }
             if (success) Text("本次新增 ${state.foundVideoCount} 个视频，目录统计已更新。", style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
+            if (success && state.scanProgress != null) {
+                val progress = state.scanProgress
+                val reconcileMessage = when {
+                    progress.reconciliationPerformed && progress.unavailableSourceCount > 0 ->
+                        "已核对并处理 ${progress.unavailableSourceCount} 个不存在的历史源文件；已导出的 MP4 不会受影响。"
+                    progress.reconciliationPerformed -> "历史源文件核对完成，未发现缺失项。"
+                    else -> "本次为筛选/快速扫描或核验不完整，未修改历史源文件状态。"
+                }
+                Text(reconcileMessage, style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onRetry, modifier = Modifier.weight(1f)) { Text("再次扫描") }
                 if (success) Button(onClick = onNavigateToHome, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = CyberVermilion)) { Text("查看视频库") }

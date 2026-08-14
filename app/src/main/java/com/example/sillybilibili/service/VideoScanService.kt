@@ -33,6 +33,21 @@ private const val PARALLELISM = 4
 // 批处理大小：一次 shell 调用读取多少个文件
 private const val BATCH_SIZE = 32
 
+/** Maps the detailed workflow to one continuous UI progress bar. */
+internal fun scanOverallProgress(step: VideoScanService.ScanStep, stepProgress: Float): Float {
+    val fraction = stepProgress.coerceIn(0f, 1f)
+    return when (step) {
+        VideoScanService.ScanStep.VALIDATING_ACCESS -> 0.02f + fraction * 0.04f
+        VideoScanService.ScanStep.DISCOVERING_FOLDERS -> 0.06f + fraction * 0.095f
+        VideoScanService.ScanStep.READING_METADATA -> 0.16f + fraction * 0.22f
+        VideoScanService.ScanStep.VALIDATING_FILES -> 0.38f + fraction * 0.265f
+        VideoScanService.ScanStep.PROCESSING_NEW -> 0.65f + fraction * 0.15f
+        VideoScanService.ScanStep.RECONCILING_HISTORY -> 0.80f + fraction * 0.12f
+        VideoScanService.ScanStep.SAVING_RESULTS -> 0.92f + fraction * 0.07f
+        VideoScanService.ScanStep.FINISHED -> 1f
+    }
+}
+
 @Singleton
 class VideoScanService @Inject constructor(
     private val shizukuHelper: ShizukuFileHelper,
@@ -51,6 +66,17 @@ class VideoScanService @Inject constructor(
 
     // 扫描阶段枚举
     enum class ScanPhase { COUNTING, PROCESSING, SAVING, COMPLETE, ERROR }
+    /** Visible workflow steps. They remain stable while the detailed phase carries the work type. */
+    enum class ScanStep(val label: String) {
+        VALIDATING_ACCESS("检查访问权限"),
+        DISCOVERING_FOLDERS("读取缓存目录"),
+        READING_METADATA("解析视频元数据"),
+        VALIDATING_FILES("核验媒体文件"),
+        PROCESSING_NEW("整理新增视频"),
+        RECONCILING_HISTORY("核对历史扫描结果"),
+        SAVING_RESULTS("保存扫描结果"),
+        FINISHED("扫描完成")
+    }
     /** The access route selected at scan time. Direct access must always win over Shizuku. */
     enum class ScanAccess { DIRECT, SHIZUKU, UNAVAILABLE }
     enum class ScanOrientation { LANDSCAPE, PORTRAIT }
@@ -76,15 +102,25 @@ class VideoScanService @Inject constructor(
     // 扫描进度状态，随 Flow 逐次发送给 UI
     data class ScanProgress(
         val phase: ScanPhase = ScanPhase.COUNTING,
+        val step: ScanStep = ScanStep.VALIDATING_ACCESS,
+        /** Progress inside [step], in the inclusive range 0..1. */
+        val stepProgress: Float = 0f,
         val totalFolders: Int = 0,
+        val existingSourceCount: Int = 0,
         val skippedFolders: Int = 0,
         val filteredFolders: Int = 0,       // 被过滤掉的文件夹数
         val newFolders: Int = 0,
         val processedFolders: Int = 0,
         val currentAvId: String = "",
         val foundVideoCount: Int = 0,
+        /** Previously scanned source tracks absent from a safely verified full scan. */
+        val unavailableSourceCount: Int = 0,
+        /** False means reconciliation was deliberately skipped to avoid false removals. */
+        val reconciliationPerformed: Boolean = false,
         val statusMessage: String = ""
-    )
+    ) {
+        val overallProgress: Float get() = scanOverallProgress(step, stepProgress)
+    }
 
     /** Persistent facts shown on the scan screen before, during and after each scan. */
     data class DirectorySnapshot(
@@ -197,6 +233,12 @@ class VideoScanService @Inject constructor(
         val useShizuku = access == ScanAccess.SHIZUKU
         val f = filter ?: ScanFilter()
 
+        emit(ScanProgress(
+            step = ScanStep.VALIDATING_ACCESS,
+            stepProgress = 0.25f,
+            statusMessage = "正在检查缓存目录与访问权限…"
+        ))
+
         // --- 检查目录是否存在 ---
         val dirExists = when (access) {
             ScanAccess.DIRECT -> canAccessDirectoryDirectly(path)
@@ -215,7 +257,12 @@ class VideoScanService @Inject constructor(
         }
 
         // --- Phase 1：列出所有 av 文件夹 ---
-        emit(ScanProgress(phase = ScanPhase.COUNTING, statusMessage = if (useShizuku) "Listing folders with Shizuku..." else "Listing folders with direct access..."))
+        emit(ScanProgress(
+            phase = ScanPhase.COUNTING,
+            step = ScanStep.DISCOVERING_FOLDERS,
+            stepProgress = 0.15f,
+            statusMessage = if (useShizuku) "正在通过 Shizuku 读取缓存目录…" else "正在读取缓存目录…"
+        ))
 
         val directoryListing = withContext(Dispatchers.IO) {
             if (useShizuku) {
@@ -244,23 +291,48 @@ class VideoScanService @Inject constructor(
         val totalFolders = avidDirNames.size
         if (totalFolders == 0) {
             if (f.mode == ScanMode.FULL && !f.isActive) {
+                val directoryPrefix = "${path.trimEnd('/')}/"
+                val unavailableSourceCount = withContext(Dispatchers.IO) {
+                    videoRepository.getAvailableSourcePathsInDirectory(directoryPrefix).size
+                }
+                emit(ScanProgress(
+                    phase = ScanPhase.PROCESSING,
+                    step = ScanStep.RECONCILING_HISTORY,
+                    stepProgress = 0.35f,
+                    existingSourceCount = unavailableSourceCount,
+                    unavailableSourceCount = unavailableSourceCount,
+                    statusMessage = if (unavailableSourceCount == 0) "缓存目录为空，正在核对历史记录…" else "缓存目录为空，发现 $unavailableSourceCount 个历史源文件已不存在…"
+                ))
                 withContext(Dispatchers.IO) {
                     videoRepository.syncCacheDirectory(
-                        directoryPrefix = "${path.trimEnd('/')}/",
+                        directoryPrefix = directoryPrefix,
                         scannedVideos = emptyList(),
                         seenPaths = emptyList(),
                         scanTimestamp = System.currentTimeMillis(),
                         allowMissingSourceReconciliation = true
                     )
                 }
-                emit(ScanProgress(phase = ScanPhase.COMPLETE, statusMessage = "Cache check complete: cache directory is empty"))
+                emit(ScanProgress(
+                    phase = ScanPhase.COMPLETE,
+                    step = ScanStep.FINISHED,
+                    existingSourceCount = unavailableSourceCount,
+                    unavailableSourceCount = unavailableSourceCount,
+                    reconciliationPerformed = true,
+                    statusMessage = if (unavailableSourceCount == 0) "扫描完成：缓存目录为空" else "扫描完成：已处理 $unavailableSourceCount 个不存在的历史源文件"
+                ))
                 return@flow
             }
             emit(ScanProgress(phase = ScanPhase.ERROR, statusMessage = "No video folders found"))
             return@flow
         }
 
-        emit(ScanProgress(phase = ScanPhase.COUNTING, totalFolders = totalFolders, statusMessage = "Found $totalFolders folders"))
+        emit(ScanProgress(
+            phase = ScanPhase.COUNTING,
+            step = ScanStep.DISCOVERING_FOLDERS,
+            stepProgress = 1f,
+            totalFolders = totalFolders,
+            statusMessage = "已发现 $totalFolders 个缓存包，正在读取历史扫描记录…"
+        ))
 
         // --- Phase 2：读取已入库路径（路径而不是 avId 才能识别新增分 P） ---
         val existingPaths = withContext(Dispatchers.IO) { videoRepository.getAllVideoPaths().toHashSet() }
@@ -269,7 +341,15 @@ class VideoScanService @Inject constructor(
             videoRepository.getAvailableSourcePathsInDirectory(directoryPrefix)
         }
 
-        emit(ScanProgress(phase = ScanPhase.PROCESSING, totalFolders = totalFolders, newFolders = avidDirNames.size, statusMessage = "Reading cache metadata in batches..."))
+        emit(ScanProgress(
+            phase = ScanPhase.PROCESSING,
+            step = ScanStep.READING_METADATA,
+            stepProgress = 0.05f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            newFolders = avidDirNames.size,
+            statusMessage = "正在分批解析 entry.json 元数据…"
+        ))
 
         // --- Phase 3：批量读取 entry.json 并预过滤 ---
         // 每批仅启动一个 shell，单项扫描复用这里解析的元数据，不再重复 cat。
@@ -287,9 +367,17 @@ class VideoScanService @Inject constructor(
             candidate.videoPath(path) in existingPaths
         }
         val filteredCount = discoveredCandidates.size - metadataMatchedCandidates.size
-        if (f.isActive) {
-            emit(ScanProgress(phase = ScanPhase.PROCESSING, totalFolders = totalFolders, skippedFolders = skippedCount, filteredFolders = filteredCount, newFolders = candidateVideos.size, statusMessage = "${candidateVideos.size} new candidates remain"))
-        }
+        emit(ScanProgress(
+            phase = ScanPhase.PROCESSING,
+            step = ScanStep.READING_METADATA,
+            stepProgress = 1f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            filteredFolders = filteredCount,
+            newFolders = candidateVideos.size,
+            statusMessage = if (f.isActive) "元数据解析完成：${candidateVideos.size} 个匹配筛选条件的新视频" else "元数据解析完成：$skippedCount 个历史视频、${candidateVideos.size} 个待处理视频"
+        ))
 
         // 仅在“完整且未筛选”的扫描完成后对账。筛选扫描只能看到数据子集，
         // 若据此标记缺失会误删仍存在的缓存记录。
@@ -309,22 +397,68 @@ class VideoScanService @Inject constructor(
             candidateVideos
         }
         var fileInfoBatchComplete = true
-        val fileInfoByVideoPath = if (f.mode == ScanMode.FULL) {
-            withContext(Dispatchers.IO) {
-                candidatesToValidate.chunked(BATCH_SIZE).flatMap { batch ->
-                    val batchResult = shizukuHelper.getVideoFileInfoBatchResult(
+        val fileInfoByVideoPath = mutableMapOf<String, Pair<Long, Long>>()
+        if (f.mode == ScanMode.FULL) {
+            val validationBatches = candidatesToValidate.chunked(BATCH_SIZE)
+            if (validationBatches.isEmpty()) {
+                emit(ScanProgress(
+                    phase = ScanPhase.PROCESSING,
+                    step = ScanStep.VALIDATING_FILES,
+                    stepProgress = 1f,
+                    totalFolders = totalFolders,
+                    existingSourceCount = availableStoredPaths.size,
+                    skippedFolders = skippedCount,
+                    filteredFolders = filteredCount,
+                    statusMessage = "没有待核验的媒体文件"
+                ))
+            }
+            validationBatches.forEachIndexed { batchIndex, batch ->
+                val batchResult = withContext(Dispatchers.IO) {
+                    shizukuHelper.getVideoFileInfoBatchResult(
                         batch.map { candidate -> candidate.videoPath(path) to candidate.audioPath(path) },
                         useShizuku
                     )
-                    if (!batchResult.completed) fileInfoBatchComplete = false
-                    batchResult.fileInfo.toList()
-                }.toMap()
+                }
+                if (!batchResult.completed) fileInfoBatchComplete = false
+                fileInfoByVideoPath.putAll(batchResult.fileInfo)
+                emit(ScanProgress(
+                    phase = ScanPhase.PROCESSING,
+                    step = ScanStep.VALIDATING_FILES,
+                    stepProgress = (batchIndex + 1).toFloat() / validationBatches.size,
+                    totalFolders = totalFolders,
+                    existingSourceCount = availableStoredPaths.size,
+                    skippedFolders = skippedCount,
+                    filteredFolders = filteredCount,
+                    newFolders = candidateVideos.size,
+                    processedFolders = min((batchIndex + 1) * BATCH_SIZE, candidatesToValidate.size),
+                    foundVideoCount = fileInfoByVideoPath.size,
+                    statusMessage = "正在核验视频与音频文件：${min((batchIndex + 1) * BATCH_SIZE, candidatesToValidate.size)}/${candidatesToValidate.size}"
+                ))
             }
-        } else emptyMap()
+        }
         val allowMissingSourceReconciliation = shouldReconcileSources && hasCompleteMetadataCoverage && fileInfoBatchComplete
+        val unavailableSourceCount = if (allowMissingSourceReconciliation) {
+            availableStoredPaths.count { it !in fileInfoByVideoPath }
+        } else 0
 
         if (candidateVideos.isEmpty()) {
             if (shouldReconcileSources) {
+                emit(ScanProgress(
+                    phase = ScanPhase.PROCESSING,
+                    step = ScanStep.RECONCILING_HISTORY,
+                    stepProgress = 0.25f,
+                    totalFolders = totalFolders,
+                    existingSourceCount = availableStoredPaths.size,
+                    skippedFolders = skippedCount,
+                    filteredFolders = filteredCount,
+                    unavailableSourceCount = unavailableSourceCount,
+                    reconciliationPerformed = allowMissingSourceReconciliation,
+                    statusMessage = when {
+                        !allowMissingSourceReconciliation -> "核验信息不完整，已跳过历史源文件清理以保护已有记录"
+                        unavailableSourceCount > 0 -> "正在核对历史记录：发现 $unavailableSourceCount 个源文件已被删除"
+                        else -> "正在核对历史记录：所有已扫描源文件仍可用"
+                    }
+                ))
                 withContext(Dispatchers.IO) {
                     videoRepository.syncCacheDirectory(
                         directoryPrefix = "${path.trimEnd('/')}/",
@@ -336,9 +470,22 @@ class VideoScanService @Inject constructor(
                 }
             }
             val message = if (shouldReconcileSources && !allowMissingSourceReconciliation) {
-                "Metadata incomplete: kept existing records and skipped deletion sync"
-            } else "Cache check complete: no new videos found"
-            emit(ScanProgress(phase = ScanPhase.COMPLETE, totalFolders = totalFolders, skippedFolders = skippedCount, filteredFolders = filteredCount, foundVideoCount = 0, statusMessage = message))
+                "元数据或文件核验不完整，已保留历史记录并跳过失效源文件清理"
+            } else if (unavailableSourceCount > 0) {
+                "扫描完成：无新增视频，已核对 $unavailableSourceCount 个不存在的历史源文件"
+            } else "扫描完成：没有新增视频，历史记录已核对"
+            emit(ScanProgress(
+                phase = ScanPhase.COMPLETE,
+                step = ScanStep.FINISHED,
+                totalFolders = totalFolders,
+                existingSourceCount = availableStoredPaths.size,
+                skippedFolders = skippedCount,
+                filteredFolders = filteredCount,
+                foundVideoCount = 0,
+                unavailableSourceCount = unavailableSourceCount,
+                reconciliationPerformed = allowMissingSourceReconciliation,
+                statusMessage = message
+            ))
             return@flow
         }
 
@@ -364,17 +511,54 @@ class VideoScanService @Inject constructor(
             val processed = min((chunkIndex + 1) * PARALLELISM, totalCandidates)
             emit(ScanProgress(
                 phase = ScanPhase.PROCESSING, totalFolders = totalFolders,
+                step = ScanStep.PROCESSING_NEW,
+                stepProgress = processed.toFloat() / totalCandidates.coerceAtLeast(1),
+                existingSourceCount = availableStoredPaths.size,
                 skippedFolders = skippedCount, filteredFolders = filteredCount,
                 newFolders = totalCandidates, processedFolders = processed,
                 foundVideoCount = videos.size,
-                statusMessage = "Processing: $processed/$totalCandidates | Found: ${videos.size}"
+                unavailableSourceCount = unavailableSourceCount,
+                statusMessage = "正在整理新增视频：$processed/$totalCandidates，已识别 ${videos.size} 个"
             ))
         }
 
         val scannedVideos = videos.values.toList()
 
-        // --- Phase 5：批量入库 ---
-        emit(ScanProgress(phase = ScanPhase.SAVING, totalFolders = totalFolders, skippedFolders = skippedCount, newFolders = totalCandidates, foundVideoCount = scannedVideos.size, statusMessage = "Saving ${scannedVideos.size} videos..."))
+        // --- Phase 5：对账历史扫描记录，再批量入库 ---
+        emit(ScanProgress(
+            phase = ScanPhase.PROCESSING,
+            step = ScanStep.RECONCILING_HISTORY,
+            stepProgress = 0.25f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            filteredFolders = filteredCount,
+            newFolders = totalCandidates,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = when {
+                !shouldReconcileSources -> "本次为筛选/快速扫描，仅新增匹配视频，不修改历史源文件状态"
+                !allowMissingSourceReconciliation -> "核验信息不完整，已跳过历史源文件清理以保护已有记录"
+                unavailableSourceCount > 0 -> "正在核对历史记录：发现 $unavailableSourceCount 个源文件已被删除"
+                else -> "正在核对历史记录：所有已扫描源文件仍可用"
+            }
+        ))
+
+        emit(ScanProgress(
+            phase = ScanPhase.SAVING,
+            step = ScanStep.SAVING_RESULTS,
+            stepProgress = 0.2f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            filteredFolders = filteredCount,
+            newFolders = totalCandidates,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = "正在保存 ${scannedVideos.size} 个新增视频并更新视频库…"
+        ))
 
         if (f.isActive) {
             // A filtered scan deliberately sees only a subset. Keep it strictly additive so it
@@ -396,10 +580,26 @@ class VideoScanService @Inject constructor(
             }
         }
 
-        val completeMessage = if (shouldReconcileSources && !allowMissingSourceReconciliation) {
-            "Saved ${scannedVideos.size} new videos; metadata incomplete, deletion sync skipped"
-        } else "Done: ${scannedVideos.size} new videos saved"
-        emit(ScanProgress(phase = ScanPhase.COMPLETE, totalFolders = totalFolders, skippedFolders = skippedCount, filteredFolders = filteredCount, newFolders = totalCandidates, foundVideoCount = scannedVideos.size, statusMessage = completeMessage))
+        val completeMessage = when {
+            shouldReconcileSources && !allowMissingSourceReconciliation ->
+                "扫描完成：新增 ${scannedVideos.size} 个视频；核验不完整，未清理历史源文件"
+            unavailableSourceCount > 0 ->
+                "扫描完成：新增 ${scannedVideos.size} 个视频，已处理 $unavailableSourceCount 个不存在的历史源文件"
+            else -> "扫描完成：新增 ${scannedVideos.size} 个视频，历史源文件已核对"
+        }
+        emit(ScanProgress(
+            phase = ScanPhase.COMPLETE,
+            step = ScanStep.FINISHED,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            filteredFolders = filteredCount,
+            newFolders = totalCandidates,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = completeMessage
+        ))
     }
 
     /**
@@ -408,12 +608,22 @@ class VideoScanService @Inject constructor(
      */
     fun scanDirectoryFromUri(treeUri: Uri, filter: ScanFilter? = null): Flow<ScanProgress> = flow {
         val f = filter ?: ScanFilter()
+        emit(ScanProgress(
+            step = ScanStep.VALIDATING_ACCESS,
+            stepProgress = 0.25f,
+            statusMessage = "正在检查系统目录授权…"
+        ))
         if (!safHelper.isDirectory(treeUri)) {
             emit(ScanProgress(phase = ScanPhase.ERROR, statusMessage = "Invalid directory"))
             return@flow
         }
 
-        emit(ScanProgress(phase = ScanPhase.COUNTING, statusMessage = "Listing folders..."))
+        emit(ScanProgress(
+            phase = ScanPhase.COUNTING,
+            step = ScanStep.DISCOVERING_FOLDERS,
+            stepProgress = 0.15f,
+            statusMessage = "正在读取已授权缓存目录…"
+        ))
 
         val directoryListing = withContext(Dispatchers.IO) {
             safHelper.listDirectoriesResult(treeUri)
@@ -431,30 +641,62 @@ class VideoScanService @Inject constructor(
         val totalFolders = avidDirNames.size
         if (totalFolders == 0) {
             if (f.mode == ScanMode.FULL && !f.isActive) {
+                val directoryPrefix = safDirectoryPrefix(treeUri)
+                val unavailableSourceCount = withContext(Dispatchers.IO) {
+                    videoRepository.getAvailableSourcePathsInDirectory(directoryPrefix).size
+                }
+                emit(ScanProgress(
+                    phase = ScanPhase.PROCESSING,
+                    step = ScanStep.RECONCILING_HISTORY,
+                    stepProgress = 0.35f,
+                    existingSourceCount = unavailableSourceCount,
+                    unavailableSourceCount = unavailableSourceCount,
+                    statusMessage = if (unavailableSourceCount == 0) "缓存目录为空，正在核对历史记录…" else "缓存目录为空，发现 $unavailableSourceCount 个历史源文件已不存在…"
+                ))
                 withContext(Dispatchers.IO) {
                     videoRepository.syncCacheDirectory(
-                        directoryPrefix = safDirectoryPrefix(treeUri),
+                        directoryPrefix = directoryPrefix,
                         scannedVideos = emptyList(),
                         seenPaths = emptyList(),
                         scanTimestamp = System.currentTimeMillis(),
                         allowMissingSourceReconciliation = true
                     )
                 }
-                emit(ScanProgress(phase = ScanPhase.COMPLETE, statusMessage = "Cache check complete: cache directory is empty"))
+                emit(ScanProgress(
+                    phase = ScanPhase.COMPLETE,
+                    step = ScanStep.FINISHED,
+                    existingSourceCount = unavailableSourceCount,
+                    unavailableSourceCount = unavailableSourceCount,
+                    reconciliationPerformed = true,
+                    statusMessage = if (unavailableSourceCount == 0) "扫描完成：缓存目录为空" else "扫描完成：已处理 $unavailableSourceCount 个不存在的历史源文件"
+                ))
                 return@flow
             }
             emit(ScanProgress(phase = ScanPhase.ERROR, statusMessage = "No video folders found"))
             return@flow
         }
 
-        emit(ScanProgress(phase = ScanPhase.COUNTING, totalFolders = totalFolders, statusMessage = "Found $totalFolders folders"))
+        emit(ScanProgress(
+            phase = ScanPhase.COUNTING,
+            step = ScanStep.DISCOVERING_FOLDERS,
+            stepProgress = 1f,
+            totalFolders = totalFolders,
+            statusMessage = "已发现 $totalFolders 个缓存包，正在读取历史扫描记录…"
+        ))
 
         val directoryPrefix = safDirectoryPrefix(treeUri)
         val existingPaths = withContext(Dispatchers.IO) { videoRepository.getAllVideoPaths().toHashSet() }
         val availableStoredPaths = withContext(Dispatchers.IO) {
             videoRepository.getAvailableSourcePathsInDirectory(directoryPrefix)
         }
-        emit(ScanProgress(phase = ScanPhase.PROCESSING, totalFolders = totalFolders, statusMessage = "Reading all cache parts..."))
+        emit(ScanProgress(
+            phase = ScanPhase.PROCESSING,
+            step = ScanStep.READING_METADATA,
+            stepProgress = 0.05f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            statusMessage = "正在读取每个缓存包的元数据…"
+        ))
 
         // SAF must use the same per-CID identity as direct/Shizuku scans. AV-only de-duplication
         // loses multi-part videos and prevents later downloaded parts from appearing.
@@ -486,6 +728,16 @@ class VideoScanService @Inject constructor(
         val matchedCandidates = discoveredCandidates.filter { !f.isActive || matchesFilter(it.meta, f) }
         val skippedCount = matchedCandidates.count { it.videoUri.toString() in existingPaths }
         val newCandidates = matchedCandidates.filterNot { it.videoUri.toString() in existingPaths }
+        emit(ScanProgress(
+            phase = ScanPhase.PROCESSING,
+            step = ScanStep.READING_METADATA,
+            stepProgress = 1f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            newFolders = newCandidates.size,
+            statusMessage = if (f.isActive) "元数据解析完成：${newCandidates.size} 个匹配筛选条件的新视频" else "元数据解析完成：$skippedCount 个历史视频、${newCandidates.size} 个待处理视频"
+        ))
         val shouldReconcileSources = f.mode == ScanMode.FULL && !f.isActive
         val currentAvidNames = avidDirNames.toSet()
         val discoveredPaths = discoveredCandidates.map { it.videoUri.toString() }.toSet()
@@ -499,25 +751,73 @@ class VideoScanService @Inject constructor(
 
         val candidatesToCheck = if (shouldReconcileSources) matchedCandidates else newCandidates
         val validVideos = mutableMapOf<String, ScannedVideo>()
+        if (candidatesToCheck.isEmpty()) {
+            emit(ScanProgress(
+                phase = ScanPhase.PROCESSING,
+                step = ScanStep.VALIDATING_FILES,
+                stepProgress = 1f,
+                totalFolders = totalFolders,
+                existingSourceCount = availableStoredPaths.size,
+                skippedFolders = skippedCount,
+                newFolders = newCandidates.size,
+                statusMessage = "没有待核验的媒体文件"
+            ))
+        }
         candidatesToCheck.forEachIndexed { index, candidate ->
             val video = withContext(Dispatchers.IO) { scanSafCandidate(candidate, f.mode) }
             if (video != null) validVideos[video.path] = video else if (f.mode == ScanMode.FULL) allCandidateFilesVerified = false
             emit(ScanProgress(
                 phase = ScanPhase.PROCESSING,
+                step = ScanStep.VALIDATING_FILES,
+                stepProgress = (index + 1).toFloat() / candidatesToCheck.size,
                 totalFolders = totalFolders,
+                existingSourceCount = availableStoredPaths.size,
                 skippedFolders = skippedCount,
                 newFolders = newCandidates.size,
                 processedFolders = index + 1,
                 foundVideoCount = validVideos.keys.count { it !in existingPaths },
-                statusMessage = "Checking cache parts: ${index + 1}/${candidatesToCheck.size}"
+                statusMessage = "正在核验视频与音频文件：${index + 1}/${candidatesToCheck.size}"
             ))
         }
         val scannedVideos = validVideos.values.filter { it.path !in existingPaths }
         val seenPaths = if (f.mode == ScanMode.FULL) validVideos.keys.toList() else emptyList()
         val allowMissingSourceReconciliation = shouldReconcileSources &&
             hasCompleteMetadataCoverage && allCandidateFilesVerified
+        val unavailableSourceCount = if (allowMissingSourceReconciliation) {
+            availableStoredPaths.count { it !in seenPaths }
+        } else 0
 
-        emit(ScanProgress(phase = ScanPhase.SAVING, totalFolders = totalFolders, skippedFolders = skippedCount, newFolders = newCandidates.size, foundVideoCount = scannedVideos.size, statusMessage = "Saving and syncing..."))
+        emit(ScanProgress(
+            phase = ScanPhase.PROCESSING,
+            step = ScanStep.RECONCILING_HISTORY,
+            stepProgress = 0.25f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            newFolders = newCandidates.size,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = when {
+                !shouldReconcileSources -> "本次为筛选/快速扫描，仅新增匹配视频，不修改历史源文件状态"
+                !allowMissingSourceReconciliation -> "核验信息不完整，已跳过历史源文件清理以保护已有记录"
+                unavailableSourceCount > 0 -> "正在核对历史记录：发现 $unavailableSourceCount 个源文件已被删除"
+                else -> "正在核对历史记录：所有已扫描源文件仍可用"
+            }
+        ))
+        emit(ScanProgress(
+            phase = ScanPhase.SAVING,
+            step = ScanStep.SAVING_RESULTS,
+            stepProgress = 0.2f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            newFolders = newCandidates.size,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = "正在保存 ${scannedVideos.size} 个新增视频并更新视频库…"
+        ))
         withContext(Dispatchers.IO) {
             if (f.isActive) {
                 // SAF filtering has the same contract as file-path filtering: add matches only.
@@ -532,10 +832,25 @@ class VideoScanService @Inject constructor(
                 )
             }
         }
-        val message = if (shouldReconcileSources && !allowMissingSourceReconciliation) {
-            "Saved ${scannedVideos.size} videos; metadata incomplete, deletion sync skipped"
-        } else "Done: ${scannedVideos.size} videos"
-        emit(ScanProgress(phase = ScanPhase.COMPLETE, totalFolders = totalFolders, skippedFolders = skippedCount, newFolders = newCandidates.size, foundVideoCount = scannedVideos.size, statusMessage = message))
+        val message = when {
+            shouldReconcileSources && !allowMissingSourceReconciliation ->
+                "扫描完成：新增 ${scannedVideos.size} 个视频；核验不完整，未清理历史源文件"
+            unavailableSourceCount > 0 ->
+                "扫描完成：新增 ${scannedVideos.size} 个视频，已处理 $unavailableSourceCount 个不存在的历史源文件"
+            else -> "扫描完成：新增 ${scannedVideos.size} 个视频，历史源文件已核对"
+        }
+        emit(ScanProgress(
+            phase = ScanPhase.COMPLETE,
+            step = ScanStep.FINISHED,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            newFolders = newCandidates.size,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = message
+        ))
     }
 
     private data class SafCandidate(

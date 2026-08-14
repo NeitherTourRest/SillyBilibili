@@ -293,7 +293,7 @@ class VideoScanServiceTest {
                 allowMissingSourceReconciliation = false
             )
         }
-        assertTrue(results.last().statusMessage.contains("skipped deletion sync"))
+        assertTrue(results.last().statusMessage.contains("跳过失效源文件清理"))
     }
 
     @Test
@@ -313,6 +313,35 @@ class VideoScanServiceTest {
             )
         }
         assertEquals(VideoScanService.ScanPhase.COMPLETE, result.last().phase)
+    }
+
+    @Test
+    fun `empty full scan reports previously scanned sources that are no longer on disk`() = runTest {
+        val root = createTempDir("bili-cache")
+        every { shizukuHelper.isShizukuAvailable() } returns false
+        coEvery { videoRepository.getAvailableSourcePathsInDirectory(any()) } returns listOf(
+            "${root.absolutePath}/123/c_1/80/video.m4s",
+            "${root.absolutePath}/456/c_2/80/video.m4s"
+        )
+
+        val result = service.scanDirectory(root.absolutePath).toList().last()
+
+        assertEquals(2, result.unavailableSourceCount)
+        assertTrue(result.reconciliationPerformed)
+        assertTrue(result.statusMessage.contains("2"))
+    }
+
+    @Test
+    fun `overall scan progress advances between named workflow steps`() {
+        assertTrue(
+            scanOverallProgress(VideoScanService.ScanStep.DISCOVERING_FOLDERS, 1f) <
+                scanOverallProgress(VideoScanService.ScanStep.READING_METADATA, 0f)
+        )
+        assertTrue(
+            scanOverallProgress(VideoScanService.ScanStep.VALIDATING_FILES, 1f) <
+                scanOverallProgress(VideoScanService.ScanStep.RECONCILING_HISTORY, 0f)
+        )
+        assertEquals(1f, scanOverallProgress(VideoScanService.ScanStep.FINISHED, 0f), 0.001f)
     }
 
     @Test
