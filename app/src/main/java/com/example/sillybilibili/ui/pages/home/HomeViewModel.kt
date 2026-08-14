@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val SEARCH_DEBOUNCE_MS = 300L
+internal const val HOME_PREFETCH_DISTANCE = 12
 
 enum class Orientation { LANDSCAPE, PORTRAIT }
 
@@ -48,7 +49,15 @@ data class HomeUiState(
     val isLoading: Boolean = false, val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
     val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null
-) { companion object { const val PAGE_SIZE = 20 } }
+) { companion object { const val PAGE_SIZE = 48 } }
+
+/** Starts the next database page early enough that long lists do not visibly pause at the end. */
+internal fun shouldPrefetchHomePage(
+    lastVisibleIndex: Int?,
+    loadedItemCount: Int,
+    hasMoreData: Boolean
+): Boolean = hasMoreData && lastVisibleIndex != null && loadedItemCount > 0 &&
+    lastVisibleIndex >= loadedItemCount - HOME_PREFETCH_DISTANCE
 
 internal data class FilterSnapshot(
     val filter: FilterState,

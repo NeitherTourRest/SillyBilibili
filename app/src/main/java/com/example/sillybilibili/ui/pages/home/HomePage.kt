@@ -108,7 +108,7 @@ fun HomePage(
     LaunchedEffect(Unit) { viewModel.refreshVideos() }
     LaunchedEffect(listState, uiState.videos.size, uiState.hasMoreData) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { lastIndex ->
-            if (uiState.hasMoreData && lastIndex != null && lastIndex >= uiState.videos.size - 5) viewModel.loadMore()
+            if (shouldPrefetchHomePage(lastIndex, uiState.videos.size, uiState.hasMoreData)) viewModel.loadMore()
         }
     }
     LaunchedEffect(uiState.errorMessage) {
@@ -186,13 +186,31 @@ fun HomePage(
                 }
             }
 
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (uiState.videos.isEmpty()) "视频库" else if (uiState.hasMoreData) "已加载 ${uiState.videos.size}+ 个视频" else "${uiState.videos.size} 个视频",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                if (uiState.filterState.isActive) Text("已启用筛选", style = MaterialTheme.typography.labelMedium, color = CyberVermilion)
+            val firstVisible = (listState.firstVisibleItemIndex + 1).coerceAtMost(uiState.videos.size)
+            val lastVisible = ((listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: listState.firstVisibleItemIndex) + 1)
+                .coerceAtMost(uiState.videos.size)
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (uiState.videos.isEmpty()) "视频库" else if (uiState.hasMoreData) "已加载 ${uiState.videos.size}+ 个视频" else "${uiState.videos.size} 个视频",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (uiState.filterState.isActive) {
+                        Text("已启用筛选", style = MaterialTheme.typography.labelMedium, color = CyberVermilion)
+                    } else if (uiState.videos.size >= HomeUiState.PAGE_SIZE) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = DarkSurfaceVariant) {
+                            Text("右侧滑条可快速定位", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
+                        }
+                    }
+                }
+                if (uiState.videos.isNotEmpty()) {
+                    Text(
+                        "正在查看第 $firstVisible–$lastVisible 条 · ${if (uiState.hasMoreData) "继续下滑自动加载" else "已加载全部结果"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DarkTextTertiary
+                    )
+                }
             }
 
             when {
@@ -203,12 +221,12 @@ fun HomePage(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(uiState.videos, key = { it.id }) { video ->
+                        items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
                             VideoCard(video, onClick = { onNavigateToPlayer(video, uiState.videos) }, onLongClick = { contextMenuVideo = video }, onCoverRequested = viewModel::requestCover, onOnlineStatusRequested = viewModel::requestOnlineStatus)
                         }
-                        if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
+                        if (uiState.isLoadingMore) item(key = "home-loading-more", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
                     FastScrollBar(
                         listState = listState,

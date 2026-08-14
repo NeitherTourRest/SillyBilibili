@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -494,6 +495,10 @@ fun PlayerPage(
                     conversionProgress = conversionProgress,
                     onConvertToMp4 = viewModel::convertToMp4,
                     backgroundPlaybackEnabled = backgroundPlaybackEnabled,
+                    durationMs = durationMs,
+                    playbackSpeed = playbackSpeed,
+                    videoAspectRatio = videoAspectRatio,
+                    usesShizukuDataSource = preparation.usesShizukuDataSource,
                     onShowEpisodes = { showQueueSheet = true },
                     onSleepTimer = { showSleepTimerSheet = true }
                 )
@@ -589,72 +594,87 @@ private fun PlaybackControls(
     onToggleFullscreen: () -> Unit
 ) {
     val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val overlayColor = Color.Black.copy(alpha = if (isFullscreen) 0.56f else 0.38f)
+    val overlayColor = Color(0xFF12131A).copy(alpha = if (isFullscreen) 0.82f else 0.76f)
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(overlayColor).padding(horizontal = 6.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = overlayColor,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(42.dp)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.11f), CircleShape)
+                ) { Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White, modifier = Modifier.size(22.dp)) }
+                Text(
+                    text = title.ifBlank { "正在播放" },
+                    modifier = Modifier.weight(1f).padding(horizontal = 9.dp),
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Text(
-                text = title.ifBlank { "正在播放" },
-                modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
 
-        Column(
-            modifier = Modifier.fillMaxWidth().background(overlayColor).padding(top = 0.dp, bottom = 2.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 0.dp, end = 12.dp, bottom = 10.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = overlayColor,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(formatPlaybackTime(positionMs), color = Color.White, style = MaterialTheme.typography.labelSmall)
-                Slider(
-                    value = progress,
-                    onValueChange = onSeek,
-                    modifier = Modifier.weight(1f).height(28.dp).padding(horizontal = 8.dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = CyberVermilionLight,
-                        activeTrackColor = CyberVermilion,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.32f)
+            Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(formatPlaybackTime(positionMs), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelSmall)
+                    Slider(
+                        value = progress,
+                        onValueChange = onSeek,
+                        modifier = Modifier.weight(1f).height(26.dp).padding(horizontal = 8.dp),
+                        colors = SliderDefaults.colors(
+                            thumbColor = CyberVermilionLight,
+                            activeTrackColor = CyberVermilion,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                        )
                     )
-                )
-                Text(formatPlaybackTime(durationMs), color = Color.White, style = MaterialTheme.typography.labelSmall)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onPrevious, enabled = canGoPrevious, modifier = Modifier.size(42.dp)) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一集", tint = Color.White.copy(alpha = if (canGoPrevious) 1f else 0.35f))
+                    Text(formatPlaybackTime(durationMs), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelSmall)
                 }
-                IconButton(onClick = onTogglePlayback, modifier = Modifier.size(42.dp)) {
-                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(30.dp))
-                }
-                IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(42.dp)) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "下一集", tint = Color.White.copy(alpha = if (canGoNext) 1f else 0.35f))
-                }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onShowEpisodes) { Text("选集", color = Color.White) }
-                TextButton(onClick = onChangeSpeed) {
-                    Icon(Icons.Default.Speed, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("${playbackSpeed}×", color = Color.White)
-                }
-                IconButton(onClick = onToggleFullscreen, modifier = Modifier.size(42.dp)) {
-                    Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = if (isFullscreen) "退出全屏" else "全屏", tint = Color.White)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onPrevious, enabled = canGoPrevious, modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "上一集", tint = Color.White.copy(alpha = if (canGoPrevious) 1f else 0.35f), modifier = Modifier.size(23.dp))
+                    }
+                    IconButton(onClick = onTogglePlayback, modifier = Modifier.size(42.dp).background(CyberVermilion, CircleShape)) {
+                        Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(27.dp))
+                    }
+                    IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "下一集", tint = Color.White.copy(alpha = if (canGoNext) 1f else 0.35f), modifier = Modifier.size(23.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onShowEpisodes, modifier = Modifier.height(36.dp).background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(18.dp))) { Text("选集", color = Color.White) }
+                    Spacer(Modifier.width(5.dp))
+                    TextButton(onClick = onChangeSpeed, modifier = Modifier.height(36.dp).background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(18.dp))) {
+                        Icon(Icons.Default.Speed, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text("${playbackSpeed}×", color = Color.White)
+                    }
+                    Spacer(Modifier.width(5.dp))
+                    IconButton(onClick = onToggleFullscreen, modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                        Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = if (isFullscreen) "退出全屏" else "全屏", tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
                 }
             }
         }
@@ -706,14 +726,16 @@ internal fun fullscreenSwipeAdjacentIndex(
     return candidate.takeIf { it in 0 until itemCount }
 }
 
-/** A switch is committed only after the user has dragged at least one fifth of the viewport. */
+/** A short, intentional drag is enough to move through a short-video style queue. */
+internal const val FULLSCREEN_SWIPE_SWITCH_FRACTION = 0.12f
+
 internal fun fullscreenSwipeTargetIndex(
     activeIndex: Int,
     itemCount: Int,
     offsetPx: Float,
     viewportHeightPx: Int
 ): Int? {
-    if (viewportHeightPx <= 0 || abs(offsetPx) < viewportHeightPx * 0.2f) return null
+    if (viewportHeightPx <= 0 || abs(offsetPx) < viewportHeightPx * FULLSCREEN_SWIPE_SWITCH_FRACTION) return null
     return fullscreenSwipeAdjacentIndex(activeIndex, itemCount, offsetPx)
 }
 
@@ -750,6 +772,10 @@ private fun PlayerInfoPanel(
     conversionProgress: com.example.sillybilibili.domain.model.ConversionProgress?,
     onConvertToMp4: (PlaybackQueueItem) -> Unit,
     backgroundPlaybackEnabled: Boolean,
+    durationMs: Long,
+    playbackSpeed: Float,
+    videoAspectRatio: Float,
+    usesShizukuDataSource: Boolean,
     onShowEpisodes: () -> Unit,
     onSleepTimer: () -> Unit
 ) {
@@ -758,6 +784,29 @@ private fun PlayerInfoPanel(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("本地缓存 · 第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
             OnlineStatusBadge(onlineStatus)
+        }
+        val sourceType = when {
+            activeItem == null -> "正在读取播放来源"
+            activeItem.isMuxedFile -> "已导出 MP4 / 单文件播放"
+            else -> "B 站分离缓存 / 视频 + 音频轨"
+        }
+        val videoName = activeItem?.videoPath?.substringAfterLast('/')?.ifBlank { "未知文件" } ?: "未知文件"
+        val durationLabel = if (durationMs > 0L) formatPlaybackTime(durationMs) else "读取中"
+        val ratioLabel = if (videoAspectRatio > 0f) "%.2f:1".format(videoAspectRatio) else "读取中"
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = DarkCard,
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("播放详情", color = DarkTextPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                PlayerDetailLine("播放来源", sourceType)
+                PlayerDetailLine("媒体文件", videoName)
+                PlayerDetailLine("时长 / 倍速", "$durationLabel · ${playbackSpeed}×")
+                PlayerDetailLine("画面比例", ratioLabel)
+                PlayerDetailLine("访问通道", if (usesShizukuDataSource) "Shizuku 直读缓存" else "本地文件或 SAF 访问")
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onShowEpisodes, modifier = Modifier.weight(1f)) { Text("选集 $queueSize", color = CyberVermilion) }
@@ -805,6 +854,21 @@ private fun PlayerInfoPanel(
             if (backgroundPlaybackEnabled) "退出此页面后将继续播放，底部迷你播放器可随时回到这里。"
             else "后台播放已关闭：退出此页面会停止播放，可在设置中开启。",
             color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun PlayerDetailLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = DarkTextSecondary, style = MaterialTheme.typography.labelSmall)
+        Text(
+            value,
+            modifier = Modifier.padding(start = 16.dp).weight(1f, fill = false),
+            color = DarkTextPrimary,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
