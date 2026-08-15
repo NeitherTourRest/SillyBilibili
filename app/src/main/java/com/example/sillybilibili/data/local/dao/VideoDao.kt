@@ -22,6 +22,7 @@ package com.example.sillybilibili.data.local.dao
 import androidx.room.*
 // VideoEntity = 数据库表对应的数据类，DAO 操作的就是这个类型的对象
 import com.example.sillybilibili.data.local.entity.VideoEntity
+import com.example.sillybilibili.data.local.entity.mergeScannedVideo
 // Flow = Kotlin 协程的"数据流"，可以持续观察数据库变化
 // 当 DAO 方法返回 Flow 时，数据一变 UI 自动刷新
 import kotlinx.coroutines.flow.Flow
@@ -54,6 +55,9 @@ interface VideoDao {
 
     @Query("SELECT * FROM videos WHERE path = :path")
     suspend fun getVideoByPath(path: String): VideoEntity?
+
+    @Query("SELECT * FROM videos WHERE path IN (:paths)")
+    suspend fun getVideosByPaths(paths: List<String>): List<VideoEntity>
 
     // --- 分页查询（LIMIT + OFFSET） ---
 
@@ -128,6 +132,9 @@ interface VideoDao {
     @Update
     suspend fun updateVideo(video: VideoEntity)
 
+    @Update
+    suspend fun updateVideos(videos: List<VideoEntity>)
+
     @Delete
     suspend fun deleteVideo(video: VideoEntity)
 
@@ -166,7 +173,20 @@ interface VideoDao {
         scanTimestamp: Long,
         allowMissingSourceReconciliation: Boolean
     ) {
-        if (videos.isNotEmpty()) insertVideos(videos)
+        if (videos.isNotEmpty()) {
+            val existingByPath = videos.map { it.path }
+                .distinct()
+                .chunked(800)
+                .flatMap { paths -> getVideosByPaths(paths) }
+                .associateBy { it.path }
+            val mergedVideos = videos.map { scanned ->
+                mergeScannedVideo(existingByPath[scanned.path], scanned)
+            }
+            val updates = mergedVideos.filter { it.id != 0L }
+            val inserts = mergedVideos.filter { it.id == 0L }
+            if (updates.isNotEmpty()) updateVideos(updates)
+            if (inserts.isNotEmpty()) insertVideos(inserts)
+        }
         seenPaths.chunked(800).forEach { paths -> markSourcesSeen(paths, scanTimestamp) }
         if (allowMissingSourceReconciliation) {
             markSourcesMissingInDirectory(directoryPrefix, scanTimestamp)
