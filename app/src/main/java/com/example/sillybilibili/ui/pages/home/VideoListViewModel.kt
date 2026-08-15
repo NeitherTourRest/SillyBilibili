@@ -8,6 +8,7 @@ import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.OnlineVideoStatusService
+import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -58,8 +59,13 @@ class VideoListViewModel @Inject constructor(
     fun requestCover(video: Video) {
         viewModelScope.launch {
             coverCacheService.cacheCover(video)?.let { cachedPath ->
+                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
                 videoRepository.updateVideo(video.copy(coverPath = cachedPath))
-                reload()
+                _uiState.update { state ->
+                    state.copy(videos = state.videos.map {
+                        if (it.id == video.id) it.copy(coverPath = cachedPath) else it
+                    })
+                }
             }
         }
     }

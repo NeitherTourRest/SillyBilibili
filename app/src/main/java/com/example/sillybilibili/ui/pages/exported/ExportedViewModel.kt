@@ -8,6 +8,7 @@ import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.ExternalMediaSyncService
+import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
@@ -185,6 +186,7 @@ class ExportedViewModel @Inject constructor(
     fun requestCover(video: Video) {
         viewModelScope.launch {
             coverCacheService.cacheCover(video)?.let { cachedPath ->
+                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
                 videoRepository.updateVideo(video.copy(coverPath = cachedPath))
             }
         }

@@ -10,6 +10,7 @@ import com.example.sillybilibili.service.VideoScanService
 import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.ExternalMediaSyncService
 import com.example.sillybilibili.service.OnlineVideoStatusService
+import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -124,8 +125,13 @@ class HomeViewModel @Inject constructor(
         val service = coverCacheService ?: return
         viewModelScope.launch {
             service.cacheCover(video)?.let { cachedPath ->
+                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
                 videoRepository.updateVideo(video.copy(coverPath = cachedPath))
-                _refreshTrigger.value++
+                _uiState.update { state ->
+                    state.copy(videos = state.videos.map {
+                        if (it.id == video.id) it.copy(coverPath = cachedPath) else it
+                    })
+                }
             }
         }
     }
