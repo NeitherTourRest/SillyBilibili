@@ -1,6 +1,7 @@
 package com.example.sillybilibili.ui.pages.player
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sillybilibili.domain.model.ConversionProgress
@@ -9,6 +10,7 @@ import com.example.sillybilibili.service.ConversionForegroundService
 import com.example.sillybilibili.service.ConversionJobRegistry
 import com.example.sillybilibili.service.PlaybackMediaResolver
 import com.example.sillybilibili.service.PlaybackReadAheadPreloader
+import com.example.sillybilibili.service.PlaybackFirstFrameExtractor
 import com.example.sillybilibili.service.PreparedPlaybackItem
 import com.example.sillybilibili.service.SettingsService
 import com.example.sillybilibili.service.OnlineVideoStatusService
@@ -37,6 +39,7 @@ class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val playbackMediaResolver: PlaybackMediaResolver,
     private val playbackReadAheadPreloader: PlaybackReadAheadPreloader,
+    private val playbackFirstFrameExtractor: PlaybackFirstFrameExtractor,
     private val settingsService: SettingsService,
     private val onlineVideoStatusService: OnlineVideoStatusService,
     private val videoConverterService: VideoConverterService,
@@ -49,13 +52,20 @@ class PlayerViewModel @Inject constructor(
     val onlineStatus: StateFlow<OnlineVideoStatus> = _onlineStatus.asStateFlow()
     private val _conversionProgress = MutableStateFlow<ConversionProgress?>(null)
     val conversionProgress: StateFlow<ConversionProgress?> = _conversionProgress.asStateFlow()
+    private val _swipePreviewFrames = MutableStateFlow<Map<Int, Bitmap>>(emptyMap())
+    /** First decoded frame for queue neighbours, keyed by their queue index. */
+    val swipePreviewFrames: StateFlow<Map<Int, Bitmap>> = _swipePreviewFrames.asStateFlow()
     private var queue: PlaybackQueue? = null
     private var conversionObservation: Job? = null
     private var readAheadJob: Job? = null
     private var swipeWarmupJob: Job? = null
     private var swipeWarmupTargetIndex: Int? = null
+    private val firstFrameJobs = mutableMapOf<Int, Job>()
 
     fun prepare(playbackQueue: PlaybackQueue) {
+        firstFrameJobs.values.forEach(Job::cancel)
+        firstFrameJobs.clear()
+        _swipePreviewFrames.value = emptyMap()
         queue = playbackQueue
         resolve(forceTemporaryCopies = false)
     }
@@ -70,6 +80,8 @@ class PlayerViewModel @Inject constructor(
         readAheadJob = viewModelScope.launch {
             playbackReadAheadPreloader.preload(adjacentItems)
         }
+        preloadSwipePreview(activeIndex - 1)
+        preloadSwipePreview(activeIndex + 1)
     }
 
     /** Starts a larger read-ahead as soon as a full-screen drag exposes a neighbouring item. */
@@ -80,6 +92,19 @@ class PlayerViewModel @Inject constructor(
         swipeWarmupJob?.cancel()
         swipeWarmupJob = viewModelScope.launch {
             playbackReadAheadPreloader.preloadTransitionTarget(item)
+        }
+        preloadSwipePreview(targetIndex)
+    }
+
+    /** Starts decoding the neighbouring page at t=0; it is silent and does not alter playback. */
+    fun preloadSwipePreview(targetIndex: Int) {
+        if (targetIndex !in queue?.items.orEmpty().indices) return
+        if (_swipePreviewFrames.value.containsKey(targetIndex) || firstFrameJobs[targetIndex]?.isActive == true) return
+        val preparedItem = _state.value.items.getOrNull(targetIndex) ?: return
+        firstFrameJobs[targetIndex] = viewModelScope.launch {
+            playbackFirstFrameExtractor.extract(preparedItem)?.let { frame ->
+                _swipePreviewFrames.update { it + (targetIndex to frame) }
+            }
         }
     }
 

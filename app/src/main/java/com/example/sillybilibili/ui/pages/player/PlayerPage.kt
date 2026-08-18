@@ -1,6 +1,7 @@
 package com.example.sillybilibili.ui.pages.player
 
 import android.content.ComponentName
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animate
@@ -64,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -128,6 +130,7 @@ fun PlayerPage(
     val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsState()
     val onlineStatus by viewModel.onlineStatus.collectAsState()
     val conversionProgress by viewModel.conversionProgress.collectAsState()
+    val swipePreviewFrames by viewModel.swipePreviewFrames.collectAsState()
     val controllerFuture = remember(context) {
         MediaController.Builder(
             context,
@@ -151,6 +154,7 @@ fun PlayerPage(
     var fullscreenViewportHeightPx by remember { mutableIntStateOf(0) }
     var isSettlingFullscreenSwipe by remember { mutableStateOf(false) }
     var swipeWarmupIndex by remember { mutableIntStateOf(-1) }
+    var settledSwipePreviewIndex by remember { mutableIntStateOf(-1) }
 
     DisposableEffect(controllerFuture) {
         controllerFuture.addListener(
@@ -235,6 +239,12 @@ fun PlayerPage(
                 if (playbackState == Player.STATE_READY) playerError = null
             }
 
+            override fun onRenderedFirstFrame() {
+                if (settledSwipePreviewIndex == activeController.currentMediaItemIndex) {
+                    settledSwipePreviewIndex = -1
+                }
+            }
+
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 videoAspectRatio = videoContentAspectRatio(
                     width = videoSize.width,
@@ -294,6 +304,7 @@ fun PlayerPage(
         isFullscreen = fullscreen
         controlsVisible = true
         if (!fullscreen) fullscreenSwipeOffsetPx = 0f
+        if (!fullscreen) settledSwipePreviewIndex = -1
         val targetActivity = activity ?: return
         val insetsController = WindowCompat.getInsetsController(targetActivity.window, targetActivity.window.decorView)
         if (fullscreen) {
@@ -335,13 +346,10 @@ fun PlayerPage(
             } else {
                 fullscreenViewportHeightPx.toFloat()
             }
-            // Start opening the selected source while the outgoing page is still animating.
-            // The previous video remains fully interactive during a held drag; this only happens
-            // after the user has released beyond the switch threshold.
+            // Keep the old player live for the complete outgoing animation. The preview has
+            // already decoded the target at t=0 and covers the player while the new item starts.
             viewModel.preloadSwipeTarget(targetIndex)
             viewModel.preloadAdjacent(targetIndex)
-            controller?.seekToDefaultPosition(targetIndex)
-            controller?.play()
             animate(
                 initialValue = fullscreenSwipeOffsetPx,
                 targetValue = outgoingOffset,
@@ -349,20 +357,19 @@ fun PlayerPage(
             ) { value, _ -> fullscreenSwipeOffsetPx = value }
 
             activeIndex = targetIndex
-            fullscreenSwipeOffsetPx = -outgoingOffset
-            animate(
-                initialValue = fullscreenSwipeOffsetPx,
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 180)
-            ) { value, _ -> fullscreenSwipeOffsetPx = value }
+            settledSwipePreviewIndex = targetIndex
+            fullscreenSwipeOffsetPx = 0f
+            controller?.seekToDefaultPosition(targetIndex)
+            controller?.play()
             isSettlingFullscreenSwipe = false
         }
     }
 
-    val swipePreviewIndex = fullscreenSwipeAdjacentIndex(
+    val swipePreviewIndex = fullscreenSwipePreviewIndex(
         activeIndex = activeIndex,
         itemCount = queue?.items?.size ?: 0,
-        offsetPx = fullscreenSwipeOffsetPx
+        offsetPx = fullscreenSwipeOffsetPx,
+        settledTargetIndex = settledSwipePreviewIndex.takeIf { it >= 0 }
     )
 
     Column(Modifier.fillMaxSize().background(DarkBackground)) {
@@ -372,14 +379,18 @@ fun PlayerPage(
             .background(Color.Black)
     ) {
         if (isFullscreen && swipePreviewIndex != null && fullscreenViewportHeightPx > 0) {
-            val previewOffset = if (fullscreenSwipeOffsetPx < 0f) {
+            val isSettledPreview = settledSwipePreviewIndex == swipePreviewIndex
+            val previewOffset = if (isSettledPreview) {
+                0
+            } else if (fullscreenSwipeOffsetPx < 0f) {
                 fullscreenViewportHeightPx + fullscreenSwipeOffsetPx.roundToInt()
             } else {
                 -fullscreenViewportHeightPx + fullscreenSwipeOffsetPx.roundToInt()
             }
             FullscreenSwipePreview(
                 item = queue?.items?.getOrNull(swipePreviewIndex),
-                modifier = Modifier.fillMaxSize().offset { IntOffset(0, previewOffset) }
+                frame = swipePreviewFrames[swipePreviewIndex],
+                modifier = Modifier.fillMaxSize().offset { IntOffset(0, previewOffset) }.zIndex(if (isSettledPreview) 3f else 1f)
             )
         }
 
@@ -789,10 +800,26 @@ internal fun fullscreenSwipeTargetIndex(
     return fullscreenSwipeAdjacentIndex(activeIndex, itemCount, offsetPx)
 }
 
+/** Keeps the revealed first-frame page on top until the target player has rendered a frame. */
+internal fun fullscreenSwipePreviewIndex(
+    activeIndex: Int,
+    itemCount: Int,
+    offsetPx: Float,
+    settledTargetIndex: Int?
+): Int? = settledTargetIndex?.takeIf { it in 0 until itemCount }
+    ?: fullscreenSwipeAdjacentIndex(activeIndex, itemCount, offsetPx)
+
 @Composable
-private fun FullscreenSwipePreview(item: PlaybackQueueItem?, modifier: Modifier = Modifier) {
+private fun FullscreenSwipePreview(item: PlaybackQueueItem?, frame: Bitmap?, modifier: Modifier = Modifier) {
     Box(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-        if (!item?.coverPath.isNullOrBlank()) {
+        if (frame != null) {
+            androidx.compose.foundation.Image(
+                bitmap = frame.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        } else if (!item?.coverPath.isNullOrBlank()) {
             AsyncImage(
                 model = item?.coverPath,
                 contentDescription = null,
