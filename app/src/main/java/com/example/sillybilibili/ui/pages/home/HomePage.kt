@@ -47,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -195,9 +196,17 @@ fun HomePage(
                 }
             }
 
-            val firstVisible = (listState.firstVisibleItemIndex + 1).coerceAtMost(uiState.videos.size)
-            val lastVisible = ((listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: listState.firstVisibleItemIndex) + 1)
-                .coerceAtMost(uiState.videos.size)
+            // Scroll offsets change every frame. The header only needs to redraw after a card
+            // boundary changes, otherwise a long list repeatedly recomposes its surrounding UI.
+            val visibleRange by remember(listState, uiState.videos.size) {
+                derivedStateOf {
+                    val itemCount = uiState.videos.size
+                    val first = (listState.firstVisibleItemIndex + 1).coerceAtMost(itemCount)
+                    val last = ((listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: listState.firstVisibleItemIndex) + 1)
+                        .coerceAtMost(itemCount)
+                    first to last
+                }
+            }
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -215,7 +224,7 @@ fun HomePage(
                 }
                 if (uiState.videos.isNotEmpty()) {
                     Text(
-                        "本页第 $firstVisible–$lastVisible 条 · ${if (uiState.hasMoreData) "下一页已预载" else "已到最后一页"}",
+                        "本页第 ${visibleRange.first}–${visibleRange.second} 条 · ${if (uiState.hasMoreData) "下一页已预载" else "已到最后一页"}",
                         style = MaterialTheme.typography.labelSmall,
                         color = DarkTextTertiary
                     )

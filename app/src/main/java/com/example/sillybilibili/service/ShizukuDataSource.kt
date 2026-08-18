@@ -77,6 +77,6 @@ class ShizukuDataSource(
     }
 
     private companion object {
-        const val MAX_RANGE_BYTES = 128 * 1024
+        const val MAX_RANGE_BYTES = 256 * 1024
     }
 }

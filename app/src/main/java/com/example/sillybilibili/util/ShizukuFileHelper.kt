@@ -100,7 +100,8 @@ class ShizukuFileHelper @Inject constructor(
                 .daemon(false)
                 .processNameSuffix("shell_svc")
                 .debuggable(true)
-                .version(1)
+                // Bump when the AIDL UserService contract changes so Shizuku replaces an old process.
+                .version(2)
 
             Shizuku.bindUserService(args, serviceConnection)
             Log.d(TAG, "ShellService binding requested")
@@ -121,7 +122,7 @@ class ShizukuFileHelper @Inject constructor(
                 .daemon(false)
                 .processNameSuffix("shell_svc")
                 .debuggable(true)
-                .version(1)
+                .version(2)
 
             Shizuku.unbindUserService(args, serviceConnection, true)
         } catch (e: Exception) {
@@ -350,6 +351,21 @@ class ShizukuFileHelper @Inject constructor(
 
         if (shellService == null) return EntryJsonBatchResult(emptyList(), false)
 
+        // Keep filesystem work inside the long-lived UserService. Creating `sh` and parsing its
+        // stdout once per batch dominated scans of libraries with thousands of cache folders.
+        try {
+            val output = shellService!!.readEntryJsonBatch(basePath, avidNames.toTypedArray())
+            val completionMarker = "__SILLY_ENTRY_COMPLETE__"
+            if (output.contains(completionMarker)) {
+                return EntryJsonBatchResult(
+                    parseEntryJsonBatchOutput(output.replace(completionMarker, "")),
+                    completed = true
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Shizuku direct entry batch read failed; falling back to shell", e)
+        }
+
         // av folder names are expected to be numeric, nevertheless quote every value.
         val avidArguments = avidNames.joinToString(" ") { "'${escapeSingleQuote(it)}'" }
         val escapedBasePath = escapeSingleQuote(basePath)
@@ -457,6 +473,27 @@ class ShizukuFileHelper @Inject constructor(
         }
 
         if (shellService == null) return VideoFileInfoBatchResult(emptyMap(), false)
+
+        try {
+            val directResult = shellService!!.getVideoFileInfoBatch(
+                filePairs.map { it.first }.toTypedArray(),
+                filePairs.map { it.second }.toTypedArray()
+            )
+            if (directResult.size == filePairs.size * 2) {
+                return VideoFileInfoBatchResult(
+                    filePairs.mapIndexedNotNull { index, (videoPath, _) ->
+                        val videoLength = directResult[index * 2]
+                        val audioLength = directResult[index * 2 + 1]
+                        if (videoLength > 0L && audioLength > 0L) {
+                            videoPath to (videoLength to audioLength)
+                        } else null
+                    }.toMap(),
+                    completed = true
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Shizuku direct file-info batch failed; falling back to shell", e)
+        }
 
         val completionMarker = "__SILLY_STAT_COMPLETE__"
         val command = buildString {

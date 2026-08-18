@@ -103,7 +103,7 @@ class ShizukuReadAheadCache @Inject constructor() {
     }
 
     private companion object {
-        const val BLOCK_SIZE_BYTES = 128 * 1024
+        const val BLOCK_SIZE_BYTES = 256 * 1024
         const val MAX_BLOCK_LOAD_BYTES = 256 * 1024
         const val MAX_CACHED_BYTES = 6 * 1024 * 1024
         const val MAX_CACHED_FILE_LENGTHS = 32

@@ -89,6 +89,26 @@ public class ShellService extends IShellService.Stub {
         }
     }
 
+    /**
+     * Reads a group of Bilibili entry.json files directly in the Shizuku UserService process.
+     * This replaces one shell process and a glob/stat pipeline per scan batch. Control separators
+     * keep the existing Kotlin parser and its incomplete-batch safety check unchanged.
+     */
+    @Override
+    public String readEntryJsonBatch(String basePath, String[] avidNames) {
+        return ShellBatchFileReader.readEntryJsonBatch(basePath, avidNames);
+    }
+
+    /**
+     * Returns [videoSize, audioSize] for every pair. A negative pair means that one media file
+     * is absent; an empty array means the batch itself was not completed and must not be used for
+     * missing-source reconciliation.
+     */
+    @Override
+    public long[] getVideoFileInfoBatch(String[] videoPaths, String[] audioPaths) {
+        return ShellBatchFileReader.getVideoFileInfoBatch(videoPaths, audioPaths);
+    }
+
     // 销毁 Shizuku 用户服务进程
     @Override
     public void destroy() {

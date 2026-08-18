@@ -31,7 +31,8 @@ import kotlin.math.min
 // 并行度：同时处理多少个 av 文件夹
 private const val PARALLELISM = 4
 // 批处理大小：一次 shell 调用读取多少个文件
-private const val BATCH_SIZE = 32
+// 48 keeps the Binder payload safely bounded while reducing cross-process batch round trips.
+private const val BATCH_SIZE = 48
 
 /** Maps the detailed workflow to one continuous UI progress bar. */
 internal fun scanOverallProgress(step: VideoScanService.ScanStep, stepProgress: Float): Float {
