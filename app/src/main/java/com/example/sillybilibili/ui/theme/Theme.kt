@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Theme.kt — Material3 主题配置
 // ============================================================
 
@@ -41,10 +41,10 @@ private val DarkColorScheme = darkColorScheme(
 
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
     large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(30.dp)
+    extraLarge = RoundedCornerShape(32.dp)
 )
 
 @Composable

@@ -86,7 +86,7 @@ fun VideoCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             VideoThumbnail(video = video, accent = accent)
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (video.ownerName.isNotBlank()) {
                         Text(video.ownerName, style = MaterialTheme.typography.labelMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -98,7 +98,8 @@ fun VideoCard(
                 }
                 Text(video.title, style = MaterialTheme.typography.titleSmall, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    VideoMeta(video.formattedDuration)
+                    // 时长已移到缩略图角标，这里只保留大小与在线状态
+                    if (video.duration <= 0L) VideoMeta(video.formattedDuration)
                     VideoMeta(video.formattedSize)
                     OnlineStatusBadge(video.onlineStatus)
                 }
@@ -112,9 +113,9 @@ private fun VideoThumbnail(video: Video, accent: Color) {
     var imageFailed by remember(video.id, video.displayCoverPath) { mutableStateOf(false) }
     Box(
         modifier = Modifier
-            .width(if (video.isVertical) 72.dp else 120.dp)
+            .width(if (video.isVertical) 84.dp else 132.dp)
             .aspectRatio(video.previewAspectRatio)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(DarkSurfaceVariant),
         contentAlignment = Alignment.Center
     ) {
@@ -126,13 +127,30 @@ private fun VideoThumbnail(video: Video, accent: Color) {
                 contentScale = ContentScale.Crop,
                 onError = { imageFailed = true }
             )
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f)))))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.42f)))))
         } ?: run {
             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(32.dp), tint = accent)
         }
+        // 画质角标：右上角
         if (video.quality.isNotBlank()) {
-            Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(6.dp), color = Color.Black.copy(alpha = 0.62f)) {
+            Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(7.dp), color = Color.Black.copy(alpha = 0.62f)) {
                 Text(video.quality, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+        // 时长角标：右下角，现代视频列表的通用做法
+        if (video.duration > 0L) {
+            Surface(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                shape = RoundedCornerShape(7.dp),
+                color = Color.Black.copy(alpha = 0.72f)
+            ) {
+                Text(
+                    video.formattedDuration,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }
@@ -140,8 +158,8 @@ private fun VideoThumbnail(video: Video, accent: Color) {
 
 @Composable
 private fun VideoMeta(label: String) {
-    Surface(shape = RoundedCornerShape(6.dp), color = DarkSurfaceVariant) {
-        Text(label, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
+    Surface(shape = RoundedCornerShape(8.dp), color = DarkSurfaceVariant) {
+        Text(label, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
     }
 }
 
@@ -155,11 +173,11 @@ fun OnlineStatusBadge(status: OnlineVideoStatus, modifier: Modifier = Modifier) 
     }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(8.dp),
         color = color.copy(alpha = 0.14f),
         border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.36f))
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = color)
+        Text(label, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

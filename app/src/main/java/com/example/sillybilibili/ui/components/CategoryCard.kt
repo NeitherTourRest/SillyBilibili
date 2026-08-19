@@ -1,4 +1,4 @@
-﻿package com.example.sillybilibili.ui.components
+package com.example.sillybilibili.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,16 +26,19 @@ fun CategoryCard(category: Category, onClick: () -> Unit, onEditClick: () -> Uni
         colors = CardDefaults.cardColors(containerColor = DarkCard), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(GlassHighlight, catColor.copy(alpha = 0.52f), DarkDivider)))
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(catColor.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(catColor.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(category.name.take(1), style = MaterialTheme.typography.titleMedium, color = catColor, fontWeight = FontWeight.Bold)
             }
             Column(modifier = Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(category.name, style = MaterialTheme.typography.titleSmall, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(category.name, style = MaterialTheme.typography.titleMedium, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold)
                 Text("${category.videoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
             }
-            IconButton(onClick = onEditClick) { Icon(Icons.Default.Edit, "编辑", tint = DarkTextSecondary) }
-            IconButton(onClick = onDeleteClick) { Icon(Icons.Default.Delete, "删除", tint = NeonRed.copy(alpha = 0.8f)) }
+            IconButton(onClick = onEditClick) { Icon(Icons.Default.Edit, "编辑", tint = DarkTextSecondary, modifier = Modifier.size(20.dp)) }
+            IconButton(onClick = onDeleteClick) { Icon(Icons.Default.Delete, "删除", tint = NeonRed.copy(alpha = 0.8f), modifier = Modifier.size(20.dp)) }
         }
     }
 }

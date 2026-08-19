@@ -309,10 +309,11 @@ private fun ExportedSearchAndFilters(
         OutlinedTextField(
             value = state.filter.query,
             onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
             singleLine = true,
-            placeholder = { Text("搜索标题、UP、AV/CID 或导出文件名") },
-            leadingIcon = { Icon(Icons.Default.Search, null) },
+            shape = RoundedCornerShape(24.dp),
+            placeholder = { Text("搜索标题、UP、AV/CID 或导出文件名", maxLines = 1) },
+            leadingIcon = { Icon(Icons.Default.Search, null, Modifier.size(20.dp)) },
             trailingIcon = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (state.filter.query.isNotBlank()) IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Default.Clear, "清空搜索") }
@@ -409,10 +410,10 @@ private fun ExportedVideoCard(
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isSelectionMode) Checkbox(checked = isSelected, onCheckedChange = { onSelect() })
             Box(
-                modifier = Modifier.width(if (video.isVertical) 58.dp else 106.dp).aspectRatio(video.previewAspectRatio).clip(RoundedCornerShape(12.dp)).background(DarkSurfaceVariant),
+                modifier = Modifier.width(if (video.isVertical) 64.dp else 118.dp).aspectRatio(video.previewAspectRatio).clip(RoundedCornerShape(14.dp)).background(DarkSurfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (video.displayCoverPath != null) {
@@ -423,13 +424,15 @@ private fun ExportedVideoCard(
                         contentScale = ContentScale.Crop
                     )
                 } else Icon(Icons.Default.PlayArrow, null, tint = CyberVermilion)
-                Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(5.dp), color = Color.Black.copy(alpha = 0.58f), shape = RoundedCornerShape(6.dp)) {
-                    Text(video.formattedDuration, Modifier.padding(horizontal = 5.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                if (video.duration > 0L) {
+                    Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp), color = Color.Black.copy(alpha = 0.72f), shape = RoundedCornerShape(7.dp)) {
+                        Text(video.formattedDuration, Modifier.padding(horizontal = 6.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(video.title, fontWeight = FontWeight.Bold, color = DarkTextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(video.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = DarkTextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(File(video.exportedPath.orEmpty()).name, style = MaterialTheme.typography.labelSmall, color = DarkTextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(video.quality.ifBlank { video.resolutionLabel.ifBlank { "MP4" } }, color = NeonCyan, style = MaterialTheme.typography.labelSmall)
@@ -442,9 +445,9 @@ private fun ExportedVideoCard(
                         label = { Text(it.name, maxLines = 1) },
                         leadingIcon = { Box(Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(Color(it.color))) },
                         colors = AssistChipDefaults.assistChipColors(containerColor = Color(it.color).copy(alpha = 0.14f), labelColor = DarkTextSecondary),
-                        modifier = Modifier.height(26.dp)
+                        modifier = Modifier.height(28.dp)
                     )
-                } ?: TextButton(onClick = onAssignCategory, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(26.dp)) { Text("添加分类", style = MaterialTheme.typography.labelSmall) }
+                } ?: TextButton(onClick = onAssignCategory, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(28.dp)) { Text("添加分类", style = MaterialTheme.typography.labelSmall) }
             }
             if (!isSelectionMode) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -549,12 +552,14 @@ private fun BatchAssignCategoryDialog(categories: List<Category>, selectedCount:
 
 @Composable
 private fun exportedTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = CyberVermilion,
-    unfocusedBorderColor = DarkDivider,
+    focusedBorderColor = CyberVermilion.copy(alpha = 0.7f),
+    unfocusedBorderColor = Color.Transparent,
     focusedTextColor = DarkTextPrimary,
     unfocusedTextColor = DarkTextPrimary,
     focusedPlaceholderColor = DarkTextTertiary,
     unfocusedPlaceholderColor = DarkTextTertiary,
+    focusedContainerColor = DarkSurfaceVariant,
+    unfocusedContainerColor = DarkSurfaceVariant,
     focusedLeadingIconColor = CyberVermilion,
     unfocusedLeadingIconColor = DarkTextSecondary
 )

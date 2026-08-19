@@ -1,4 +1,4 @@
-﻿package com.example.sillybilibili.ui.components
+package com.example.sillybilibili.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -116,7 +116,7 @@ private fun FilterSection(title: String, content: @Composable ColumnScope.() -> 
 
 @Composable
 private fun <T> FilterChipRow(options: List<Pair<T?, String>>, selected: T?, onSelect: (T?) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         options.forEach { (value, label) ->
             FilterChip(
                 selected = selected == value,
@@ -124,7 +124,7 @@ private fun <T> FilterChipRow(options: List<Pair<T?, String>>, selected: T?, onS
                 label = {
                     Text(label, fontWeight = if (selected == value) FontWeight.Bold else FontWeight.Normal)
                 },
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = CyberVermilion.copy(alpha = 0.2f),
                     containerColor = DarkSurfaceVariant,

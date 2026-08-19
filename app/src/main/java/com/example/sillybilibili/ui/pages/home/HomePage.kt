@@ -79,6 +79,7 @@ import com.example.sillybilibili.ui.theme.DarkDivider
 import com.example.sillybilibili.ui.theme.DarkSurfaceVariant
 import com.example.sillybilibili.ui.theme.DarkTextSecondary
 import com.example.sillybilibili.ui.theme.DarkTextTertiary
+import com.example.sillybilibili.ui.theme.GlassHighlight
 import kotlinx.coroutines.launch
 
 @Composable
@@ -158,9 +159,9 @@ fun HomePage(
 
             SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索本地视频")
             if (uiState.categories.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("分类", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onNavigateToCategories) { Text("管理") }
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("分类", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = onNavigateToCategories) { Text("管理", color = CyberVermilion) }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
@@ -193,18 +194,18 @@ fun HomePage(
                     first to last
                 }
             }
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (uiState.videos.isEmpty()) "视频库" else "第 ${uiState.currentPage + 1} 页 · ${uiState.videos.size} 个视频",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     if (uiState.filterState.isActive) {
                         Text("已启用筛选", style = MaterialTheme.typography.labelMedium, color = CyberVermilion)
                     } else if (uiState.hasMoreData) {
-                        Surface(shape = RoundedCornerShape(12.dp), color = DarkSurfaceVariant) {
-                            Text("下滑自动进入下一页", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
+                        Surface(shape = RoundedCornerShape(16.dp), color = DarkSurfaceVariant) {
+                            Text("下滑自动进入下一页", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
                         }
                     }
                 }
@@ -224,8 +225,8 @@ fun HomePage(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
                             VideoCard(
@@ -288,12 +289,24 @@ private fun ScanProgressBanner() {
 @Composable
 private fun EmptyVideoLibrary(onScan: () -> Unit) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Surface(shape = MaterialTheme.shapes.large, color = DarkSurfaceVariant) { Icon(Icons.Default.VideoLibrary, null, modifier = Modifier.padding(20.dp).size(38.dp), tint = CyberVermilion) }
-            Text("还没有本地视频", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = DarkSurfaceVariant,
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassHighlight)
+            ) {
+                Icon(Icons.Default.VideoLibrary, null, modifier = Modifier.padding(24.dp).size(40.dp), tint = CyberVermilion)
+            }
+            Text("还没有本地视频", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("扫描 B 站缓存目录后，视频会显示在这里。", color = DarkTextTertiary, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(6.dp))
-            androidx.compose.material3.Button(onClick = onScan) { Icon(Icons.Default.YoutubeSearchedFor, null); Spacer(Modifier.width(6.dp)); Text("开始扫描") }
+            Spacer(Modifier.height(4.dp))
+            androidx.compose.material3.Button(
+                onClick = onScan,
+                shape = RoundedCornerShape(16.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = CyberVermilion)
+            ) {
+                Icon(Icons.Default.YoutubeSearchedFor, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("开始扫描", fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
