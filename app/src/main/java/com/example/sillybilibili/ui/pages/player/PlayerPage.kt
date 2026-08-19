@@ -94,6 +94,7 @@ import com.example.sillybilibili.service.PlaybackService
 import com.example.sillybilibili.service.CachePlaybackMetadata
 import com.example.sillybilibili.domain.model.ConversionStatus
 import com.example.sillybilibili.ui.components.ConversionStatusView
+import com.example.sillybilibili.util.BvConverter
 import com.example.sillybilibili.ui.components.OnlineStatusBadge
 import com.example.sillybilibili.ui.theme.CyberVermilion
 import com.example.sillybilibili.ui.theme.CyberVermilionGlow
@@ -128,6 +129,7 @@ fun PlayerPage(
     val preparation by viewModel.state.collectAsState()
     val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsState()
     val onlineStatus by viewModel.onlineStatus.collectAsState()
+    val currentVideo by viewModel.currentVideo.collectAsState()
     val conversionProgress by viewModel.conversionProgress.collectAsState()
     val swipePreviewFrames by viewModel.swipePreviewFrames.collectAsState()
     val controllerFuture = remember(context) {
@@ -181,6 +183,7 @@ fun PlayerPage(
         queue?.items?.getOrNull(activeIndex)?.let { item ->
             viewModel.requestOnlineStatus(item.id)
             viewModel.observeConversion(item.id)
+            viewModel.loadVideoDetail(item.id)
         }
     }
 
@@ -528,6 +531,7 @@ fun PlayerPage(
                     queueSize = queue?.items?.size ?: 0,
                     onlineStatus = onlineStatus,
                     activeItem = queue?.items?.getOrNull(activeIndex),
+                    currentVideo = currentVideo,
                     conversionProgress = conversionProgress,
                     onConvertToMp4 = viewModel::convertToMp4,
                     backgroundPlaybackEnabled = backgroundPlaybackEnabled,
@@ -821,6 +825,7 @@ private fun PlayerInfoPanel(
     queueSize: Int,
     onlineStatus: com.example.sillybilibili.domain.model.OnlineVideoStatus,
     activeItem: PlaybackQueueItem?,
+    currentVideo: com.example.sillybilibili.domain.model.Video?,
     conversionProgress: com.example.sillybilibili.domain.model.ConversionProgress?,
     onConvertToMp4: (PlaybackQueueItem) -> Unit,
     backgroundPlaybackEnabled: Boolean,
@@ -853,6 +858,15 @@ private fun PlayerInfoPanel(
         ) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("播放详情", color = DarkTextPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                currentVideo?.let { video ->
+                    val videoIdLabel = buildString {
+                        append("av${video.avid}")
+                        BvConverter.avidToBv(video.avid)?.let { append(" · $it") }
+                    }
+                    PlayerDetailLine("视频编号", videoIdLabel)
+                    if (video.pubdate > 0L) PlayerDetailLine("发布时间", formatPublishDate(video.pubdate))
+                    PlayerDetailLine("缓存时间", formatCachedAt(video.addedAt))
+                }
                 PlayerDetailLine("播放来源", sourceType)
                 PlayerDetailLine("媒体文件", videoName)
                 PlayerDetailLine("时长 / 倍速", "$durationLabel · ${playbackSpeed}×")
@@ -967,6 +981,18 @@ private fun InlinePlaylistRow(
         if (selected) Icon(Icons.Default.PlayArrow, contentDescription = "当前播放", tint = CyberVermilion)
     }
 }
+
+/** 发布时间（Unix 秒）→ 日期。 */
+internal fun formatPublishDate(pubdateSeconds: Long): String =
+    java.time.Instant.ofEpochSecond(pubdateSeconds)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+/** 缓存入库时间（毫秒）→ 日期时间。 */
+internal fun formatCachedAt(addedAtMs: Long): String =
+    java.time.Instant.ofEpochMilli(addedAtMs)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
 
 /** 把 Media3 错误码翻译成用户能理解的中文提示。 */
 internal fun playbackErrorHint(error: PlaybackException): String = playbackErrorHint(error.errorCode)

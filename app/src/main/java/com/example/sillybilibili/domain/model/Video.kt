@@ -36,6 +36,8 @@ data class Video(
     val coverPath: String? = null,
     /** Original cover location. It is copied to [coverPath] only when the card is displayed. */
     val coverSourcePath: String? = null,
+    /** B 站视频发布时间（Unix 秒，来自缓存 entry.json；0 表示未知）。 */
+    val pubdate: Long = 0,
     val addedAt: Long = System.currentTimeMillis(),
     val exportedPath: String? = null,
     /** False after a successful full scan confirms that the original Bilibili cache is gone. */

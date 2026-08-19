@@ -12,6 +12,8 @@ internal fun mergeScannedVideo(existing: VideoEntity?, scanned: VideoEntity): Vi
         categoryId = existing.categoryId,
         coverPath = existing.coverPath,
         coverSourcePath = scanned.coverSourcePath?.takeIf { it.isNotBlank() } ?: existing.coverSourcePath,
+        // 新扫描缺失 pubdate 时保留旧值
+        pubdate = scanned.pubdate.takeIf { it > 0L } ?: existing.pubdate,
         addedAt = existing.addedAt,
         exportedPath = existing.exportedPath,
         sourceAvailable = true,

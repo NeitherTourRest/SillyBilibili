@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // VideoEntity.kt — 视频的数据库表结构
 // ============================================================
 // 这是 Room 数据库的一张表叫 "videos"。
@@ -58,6 +58,7 @@ data class VideoEntity(
     val categoryId: Long? = null,// 所属分类 ID
     val coverPath: String? = null,// 封面缓存路径
     val coverSourcePath: String? = null, // 原始封面路径；首屏需要时才复制进缓存
+    val pubdate: Long = 0,             // B 站视频发布时间（Unix 秒）
     val addedAt: Long = System.currentTimeMillis(),  // 添加时间
     val exportedPath: String? = null,  // 导出后的 .mp4 路径（null=未导出）
     val sourceAvailable: Boolean = true,

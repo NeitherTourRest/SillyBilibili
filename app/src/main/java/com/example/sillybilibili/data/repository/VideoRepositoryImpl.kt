@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // VideoRepositoryImpl.kt — 视频仓库接口的具体实现
 // ============================================================
 // 这是 VideoRepository 接口的真正代码。
@@ -221,6 +221,7 @@ class VideoRepositoryImpl @Inject constructor(
         categoryId = categoryId,
         coverPath = coverPath,
         coverSourcePath = coverSourcePath,
+        pubdate = pubdate,
         addedAt = addedAt,
         exportedPath = exportedPath,
         sourceAvailable = sourceAvailable,
@@ -247,6 +248,7 @@ class VideoRepositoryImpl @Inject constructor(
         categoryId = categoryId,
         coverPath = coverPath,
         coverSourcePath = coverSourcePath,
+        pubdate = pubdate,
         addedAt = addedAt,
         exportedPath = exportedPath,
         sourceAvailable = sourceAvailable,

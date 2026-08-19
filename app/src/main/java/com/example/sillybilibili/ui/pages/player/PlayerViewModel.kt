@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sillybilibili.domain.model.ConversionProgress
 import com.example.sillybilibili.domain.model.ConversionStatus
+import com.example.sillybilibili.domain.model.Video
+import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.ConversionForegroundService
 import com.example.sillybilibili.service.ConversionJobRegistry
 import com.example.sillybilibili.service.PlaybackMediaResolver
@@ -43,13 +45,17 @@ class PlayerViewModel @Inject constructor(
     private val settingsService: SettingsService,
     private val onlineVideoStatusService: OnlineVideoStatusService,
     private val videoConverterService: VideoConverterService,
-    private val conversionJobRegistry: ConversionJobRegistry
+    private val conversionJobRegistry: ConversionJobRegistry,
+    private val videoRepository: VideoRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(PlayerPreparationState())
     val state: StateFlow<PlayerPreparationState> = _state.asStateFlow()
     val backgroundPlaybackEnabled = settingsService.backgroundPlaybackEnabledFlow
     private val _onlineStatus = MutableStateFlow(OnlineVideoStatus.UNCHECKED)
     val onlineStatus: StateFlow<OnlineVideoStatus> = _onlineStatus.asStateFlow()
+    /** 当前播放条目的完整数据库记录（av/BV 号、发布时间、缓存时间等）。 */
+    private val _currentVideo = MutableStateFlow<Video?>(null)
+    val currentVideo: StateFlow<Video?> = _currentVideo.asStateFlow()
     private val _conversionProgress = MutableStateFlow<ConversionProgress?>(null)
     val conversionProgress: StateFlow<ConversionProgress?> = _conversionProgress.asStateFlow()
     private val _swipePreviewFrames = MutableStateFlow<Map<Int, Bitmap>>(emptyMap())
@@ -109,6 +115,17 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun shouldKeepPlayingAfterLeaving(): Boolean = settingsService.backgroundPlaybackEnabled
+
+    /** 按视频 id 加载完整记录用于播放页信息栏展示。 */
+    fun loadVideoDetail(videoId: Long) {
+        if (videoId <= 0L) {
+            _currentVideo.value = null
+            return
+        }
+        viewModelScope.launch {
+            _currentVideo.value = videoRepository.getVideoById(videoId)
+        }
+    }
 
     fun requestOnlineStatus(videoId: Long) {
         if (videoId <= 0L) return

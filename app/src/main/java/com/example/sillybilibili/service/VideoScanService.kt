@@ -148,7 +148,9 @@ class VideoScanService @Inject constructor(
         val size: Long,
         val duration: Long,
         val parentFolder: String,
-        val coverSourcePath: String? = null
+        val coverSourcePath: String? = null,
+        /** B 站发布时间（Unix 秒，来自 entry.json；0=未知）。 */
+        val pubdate: Long = 0
     )
 
     // ============================================================
@@ -952,7 +954,8 @@ class VideoScanService @Inject constructor(
             size = size,
             duration = candidate.meta.duration,
             parentFolder = candidate.avidName,
-            coverSourcePath = safHelper.findChild(candidate.cidUri, "cover.jpg")?.toString()
+            coverSourcePath = safHelper.findChild(candidate.cidUri, "cover.jpg")?.toString(),
+            pubdate = candidate.meta.pubdate
         )
     }
 
@@ -963,7 +966,7 @@ class VideoScanService @Inject constructor(
     private data class ParsedMeta(
         val title: String, val ownerName: String, val quality: String,
         val width: Int, val height: Int, val duration: Long, val typeTag: String, val cid: Long,
-        val totalBytes: Long
+        val totalBytes: Long, val pubdate: Long
     )
 
     private data class EntryCandidate(
@@ -992,7 +995,8 @@ class VideoScanService @Inject constructor(
             duration = json.optLong("total_time_milli", 0L),
             typeTag = json.optString("type_tag", "0"),
             cid = json.optJSONObject("page_data")?.optLong("cid", 0L) ?: 0L,
-            totalBytes = json.optLong("total_bytes", 0L)
+            totalBytes = json.optLong("total_bytes", 0L),
+            pubdate = json.optLong("pubdate", 0L)
         )
     }
 
@@ -1046,7 +1050,8 @@ class VideoScanService @Inject constructor(
             quality = meta.quality, width = meta.width, height = meta.height,
             path = videoFilePath, audioPath = audioFilePath,
             coverPath = null, size = size, duration = meta.duration, parentFolder = candidate.avidName,
-            coverSourcePath = "$cidPath/cover.jpg"
+            coverSourcePath = "$cidPath/cover.jpg",
+            pubdate = meta.pubdate
         )
     }
 
@@ -1076,6 +1081,7 @@ class VideoScanService @Inject constructor(
         avid = avid, cid = cid, title = title, ownerName = ownerName,
         quality = quality, width = width, height = height,
         path = path, audioPath = audioPath, size = size,
-        duration = duration, coverPath = coverPath, coverSourcePath = coverSourcePath
+        duration = duration, coverPath = coverPath, coverSourcePath = coverSourcePath,
+        pubdate = pubdate
     )
 }
