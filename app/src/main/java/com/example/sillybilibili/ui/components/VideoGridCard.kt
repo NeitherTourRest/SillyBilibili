@@ -1,5 +1,10 @@
 package com.example.sillybilibili.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -36,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -73,6 +79,21 @@ fun VideoGridCard(
     modifier: Modifier = Modifier
 ) {
     val accent = if (video.isVertical) androidx.compose.ui.graphics.Color(0xFFB388FF) else CyberVermilion
+    val animatedContainer by animateColorAsState(
+        targetValue = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard,
+        animationSpec = tween(durationMillis = 180),
+        label = "gridCardContainer"
+    )
+    val animatedBorder by animateColorAsState(
+        targetValue = if (selected) CyberVermilion else Color.Transparent,
+        animationSpec = tween(durationMillis = 180),
+        label = "gridCardBorder"
+    )
+    val checkScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "gridCheckPop"
+    )
     LaunchedEffect(video.id, video.coverPath, video.coverSourcePath, video.exportedPath) {
         onCoverRequested(video)
     }
@@ -87,10 +108,10 @@ fun VideoGridCard(
         ),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard
+            containerColor = animatedContainer
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
-        border = if (selected) BorderStroke(1.5.dp, CyberVermilion) else null
+        border = if (selectionMode) BorderStroke(1.5.dp, animatedBorder) else null
     ) {
         Column {
             var imageFailed by remember(video.id, video.displayCoverPath) { mutableStateOf(false) }
@@ -115,14 +136,30 @@ fun VideoGridCard(
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(32.dp), tint = accent)
                 }
                 if (selectionMode) {
+                    val circleColor by animateColorAsState(
+                        targetValue = if (selected) CyberVermilion else Color.Black.copy(alpha = 0.55f),
+                        animationSpec = tween(durationMillis = 160),
+                        label = "gridCheckCircle"
+                    )
                     Surface(
                         modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                         shape = CircleShape,
-                        color = if (selected) CyberVermilion else Color.Black.copy(alpha = 0.55f),
+                        color = circleColor,
                         border = BorderStroke(1.5.dp, if (selected) CyberVermilion else DarkDivider)
                     ) {
-                        if (selected) Icon(Icons.Default.Check, contentDescription = "已选择", tint = Color.White, modifier = Modifier.padding(3.dp).size(14.dp))
-                        else Spacer(Modifier.padding(3.dp).size(14.dp))
+                        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                            if (selected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "已选择",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp).graphicsLayer {
+                                        scaleX = checkScale
+                                        scaleY = checkScale
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
                 if (video.quality.isNotBlank()) {

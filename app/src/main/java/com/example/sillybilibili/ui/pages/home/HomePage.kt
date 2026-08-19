@@ -1,6 +1,11 @@
 package com.example.sillybilibili.ui.pages.home
 
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -261,7 +266,12 @@ fun HomePage(
             when {
                 uiState.isLoading -> SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp))
                 uiState.videos.isEmpty() -> EmptyVideoLibrary(onScan = onNavigateToScan)
-                uiState.gridViewEnabled -> Box(Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, gridState, viewModel::selectRange)) {
+                else -> AnimatedContent(
+                    targetState = uiState.gridViewEnabled,
+                    transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },
+                    label = "homeViewSwitch"
+                ) { grid ->
+                if (grid) Box(Modifier.fillMaxSize().rangeSelectDrag(uiState.isSelectionMode, gridState, viewModel::selectRange)) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         state = gridState,
@@ -285,8 +295,7 @@ fun HomePage(
                         }
                         if (uiState.isLoadingMore) item(key = "home-switching-page-grid", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
-                }
-                else -> Box(Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange)) {
+                } else Box(Modifier.fillMaxSize().rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange)) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -308,6 +317,7 @@ fun HomePage(
                         }
                         if (uiState.isLoadingMore) item(key = "home-switching-page", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
+                }
                 }
             }
         }

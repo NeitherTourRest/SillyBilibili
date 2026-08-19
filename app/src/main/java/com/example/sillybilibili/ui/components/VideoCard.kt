@@ -1,5 +1,7 @@
 package com.example.sillybilibili.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -72,6 +74,11 @@ fun VideoCard(
     modifier: Modifier = Modifier
 ) {
     val accent = if (video.isVertical) NeonPurple else CyberVermilion
+    val animatedContainer by animateColorAsState(
+        targetValue = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard,
+        animationSpec = tween(durationMillis = 180),
+        label = "videoCardContainer"
+    )
     LaunchedEffect(video.id, video.coverPath, video.coverSourcePath, video.exportedPath) {
         // Also re-check a stale cached path. CoverCacheService removes invalid cache files
         // and restores the original cover or a video-frame fallback.
@@ -88,7 +95,7 @@ fun VideoCard(
         ),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard
+            containerColor = animatedContainer
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
         border = CardDefaults.outlinedCardBorder(enabled = true).copy(brush = Brush.linearGradient(listOf(GlassHighlight, accent.copy(alpha = 0.52f), DarkDivider)))
