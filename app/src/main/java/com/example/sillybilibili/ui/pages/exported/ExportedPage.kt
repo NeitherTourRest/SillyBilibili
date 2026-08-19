@@ -79,6 +79,7 @@ import coil.request.ImageRequest
 import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
+import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.FastScrollBar
 import com.example.sillybilibili.ui.components.SkeletonVideoList
 import com.example.sillybilibili.ui.theme.CyberVermilion
@@ -374,14 +375,15 @@ private fun ExportedLibrarySummary(state: ExportedUiState) {
 
 @Composable
 private fun ExportedEmptyState(hasActiveFilter: Boolean, onReset: () -> Unit) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Default.VideoLibrary, null, Modifier.size(58.dp), tint = DarkSurfaceVariant)
-            Text(if (hasActiveFilter) "没有匹配的导出视频" else "还没有导出的视频", color = DarkTextPrimary, fontWeight = FontWeight.Bold)
-            Text(if (hasActiveFilter) "可清除搜索或筛选条件后重试。" else "在播放页转换为 MP4 后，文件会集中显示在这里。", color = DarkTextSecondary)
-            if (hasActiveFilter) TextButton(onClick = onReset) { Text("清除筛选") }
-        }
-    }
+    EmptyStatePanel(
+        icon = Icons.Default.VideoLibrary,
+        title = if (hasActiveFilter) "没有匹配的导出视频" else "还没有导出的视频",
+        subtitle = if (hasActiveFilter) "可清除搜索或筛选条件后重试。" else "在播放页转换为 MP4 后，文件会集中显示在这里。",
+        accent = NeonCyan,
+        action = if (hasActiveFilter) {
+            { TextButton(onClick = onReset) { Text("清除筛选") } }
+        } else null
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)

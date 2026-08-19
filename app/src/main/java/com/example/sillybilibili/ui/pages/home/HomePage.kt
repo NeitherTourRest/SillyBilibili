@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.YoutubeSearchedFor
@@ -80,6 +81,7 @@ import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.R
 import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.BatchActionBar
+import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
@@ -97,6 +99,7 @@ import com.example.sillybilibili.ui.theme.DarkSurfaceVariant
 import com.example.sillybilibili.ui.theme.DarkTextSecondary
 import com.example.sillybilibili.ui.theme.DarkTextTertiary
 import com.example.sillybilibili.ui.theme.GlassHighlight
+import com.example.sillybilibili.ui.theme.NeonPurple
 import kotlinx.coroutines.launch
 
 @Composable
@@ -265,7 +268,24 @@ fun HomePage(
 
             when {
                 uiState.isLoading -> SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp))
-                uiState.videos.isEmpty() -> EmptyVideoLibrary(onScan = onNavigateToScan)
+                uiState.videos.isEmpty() -> {
+                    val hasActiveQuery = uiState.searchQuery.isNotBlank() || uiState.filterState.isActive || uiState.selectedCategoryId != null
+                    if (hasActiveQuery) {
+                        EmptyStatePanel(
+                            icon = Icons.Default.Search,
+                            title = "没有找到匹配的视频",
+                            subtitle = "试试其他关键词，或清除搜索与筛选条件。",
+                            accent = NeonPurple,
+                            action = {
+                                TextButton(onClick = { viewModel.updateSearchQuery(""); viewModel.clearFilter(); viewModel.selectCategory(null) }) {
+                                    Text("清除搜索与筛选", color = NeonPurple)
+                                }
+                            }
+                        )
+                    } else {
+                        EmptyVideoLibrary(onScan = onNavigateToScan)
+                    }
+                }
                 else -> AnimatedContent(
                     targetState = uiState.gridViewEnabled,
                     transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },
@@ -367,18 +387,11 @@ private fun ScanProgressBanner() {
 
 @Composable
 private fun EmptyVideoLibrary(onScan: () -> Unit) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = DarkSurfaceVariant,
-                border = androidx.compose.foundation.BorderStroke(1.dp, GlassHighlight)
-            ) {
-                Icon(Icons.Default.VideoLibrary, null, modifier = Modifier.padding(24.dp).size(40.dp), tint = CyberVermilion)
-            }
-            Text("还没有本地视频", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("扫描 B 站缓存目录后，视频会显示在这里。", color = DarkTextTertiary, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
+    EmptyStatePanel(
+        icon = Icons.Default.VideoLibrary,
+        title = "还没有本地视频",
+        subtitle = "扫描 B 站缓存目录后，视频会显示在这里。",
+        action = {
             androidx.compose.material3.Button(
                 onClick = onScan,
                 shape = RoundedCornerShape(16.dp),
@@ -387,5 +400,5 @@ private fun EmptyVideoLibrary(onScan: () -> Unit) {
                 Icon(Icons.Default.YoutubeSearchedFor, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("开始扫描", fontWeight = FontWeight.SemiBold)
             }
         }
-    }
+    )
 }

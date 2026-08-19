@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -78,7 +79,12 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                 SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索此分类")
             }
             if (uiState.isLoading) SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp))
-            else if (uiState.videos.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("这个分类暂时没有视频", color = DarkTextSecondary, fontWeight = FontWeight.Bold) }
+            else if (uiState.videos.isEmpty()) EmptyStatePanel(
+                icon = Icons.Filled.FolderOpen,
+                title = "这个分类暂时没有视频",
+                subtitle = if (uiState.searchQuery.isNotBlank()) "没有找到匹配的搜索关键词。" else "去首页看看其他分类，或扫描更多缓存视频。",
+                accent = NeonPurple
+            )
             else Column(Modifier.weight(1f)) {
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
