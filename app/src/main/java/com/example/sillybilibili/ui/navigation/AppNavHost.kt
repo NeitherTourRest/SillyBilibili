@@ -1,16 +1,23 @@
 package com.example.sillybilibili.ui.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.sillybilibili.ui.components.AppBottomBar
+import com.example.sillybilibili.ui.components.bottomTabs
 import com.example.sillybilibili.ui.pages.categories.CategoriesPage
 import com.example.sillybilibili.ui.pages.guide.GuidePage
 import com.example.sillybilibili.ui.pages.exported.ExportedPage
@@ -22,6 +29,7 @@ import com.example.sillybilibili.ui.pages.player.PlaybackQueueStore
 import com.example.sillybilibili.ui.pages.player.BackgroundPlaybackEntry
 import com.example.sillybilibili.ui.pages.scan.ScanPage
 import com.example.sillybilibili.ui.pages.settings.SettingsPage
+import com.example.sillybilibili.ui.theme.DarkBackground
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -41,7 +49,26 @@ sealed class Screen(val route: String) {
 @Composable
 fun AppNavHost(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
-    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+    val currentRoute = backStackEntry?.destination?.route
+    val showBottomBar = currentRoute in bottomTabs.map { it.route }
+    Scaffold(
+        containerColor = DarkBackground,
+        bottomBar = {
+            if (showBottomBar) {
+                AppBottomBar(
+                    currentRoute = currentRoute,
+                    onNavigate = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+        }
+    ) { innerPadding ->
+    Box(Modifier.fillMaxSize().padding(innerPadding)) {
     NavHost(navController = navController, startDestination = Screen.Home.route) {
 
         composable(Screen.Home.route) {
@@ -135,5 +162,6 @@ fun AppNavHost(navController: NavHostController) {
             }
         }
     )
+    }
     }
 }
