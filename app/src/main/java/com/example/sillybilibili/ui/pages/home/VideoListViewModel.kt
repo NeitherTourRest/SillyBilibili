@@ -7,6 +7,7 @@ import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.OnlineVideoStatus
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.CategoryRepository
+import com.example.sillybilibili.ui.components.BatchProgress
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.ConversionForegroundService
 import com.example.sillybilibili.service.ConversionJobRegistry
@@ -39,6 +40,8 @@ data class VideoListUiState(
     val filterState: FilterState = FilterState(),
     val isSelectionMode: Boolean = false,
     val selectedIds: Set<Long> = emptySet(),
+    /** 批量操作实时进度（转换/刷新状态/完整性检查）。 */
+    val batchProgress: BatchProgress? = null,
     val errorMessage: String? = null
 ) {
     companion object { const val PAGE_SIZE = 20 }
@@ -337,6 +340,10 @@ class VideoListViewModel @Inject constructor(
         return state.videos.filter { it.id in state.selectedIds }
     }
 
+    /** 批量转换计数（用于进度条）。 */
+    private var conversionLaunchedCount = 0
+    private var conversionTotal = 0
+
     fun batchConvertToMp4() {
         val videos = selectedVideos()
         if (videos.isEmpty()) return
@@ -344,10 +351,19 @@ class VideoListViewModel @Inject constructor(
         val registry = conversionJobRegistry ?: return
         val context = appContext ?: return
         conversionQueue.addAll(videos)
+        conversionLaunchedCount = 0
+        conversionTotal = videos.size
+        _uiState.update { it.copy(batchProgress = BatchProgress("转换 MP4", 0, videos.size)) }
         showMessage("已加入 ${videos.size} 个转换任务，将逐个执行")
         if (conversionPump == null) {
             conversionPump = viewModelScope.launch {
-                registry.jobs.collect { launchNextConversion(context) }
+                registry.jobs.collect { jobs ->
+                    launchNextConversion(context)
+                    if (conversionQueue.isEmpty() && jobs.isEmpty() && conversionTotal > 0) {
+                        _uiState.update { it.copy(batchProgress = null) }
+                        conversionTotal = 0
+                    }
+                }
             }
         }
         launchNextConversion(context)
@@ -358,6 +374,10 @@ class VideoListViewModel @Inject constructor(
         val next = conversionQueue.firstOrNull() ?: return
         if (registry.isRunning(next.id)) return
         conversionQueue.removeFirst()
+        conversionLaunchedCount++
+        if (conversionTotal > 0) {
+            _uiState.update { it.copy(batchProgress = BatchProgress("转换 MP4", conversionLaunchedCount, conversionTotal)) }
+        }
         val outputDir = settingsService?.outputPath ?: videoConverterService?.getDefaultOutputPath() ?: return
         ConversionForegroundService.start(
             context,
@@ -378,7 +398,8 @@ class VideoListViewModel @Inject constructor(
         val service = onlineVideoStatusService ?: return
         viewModelScope.launch {
             var online = 0; var unavailable = 0; var unverifiable = 0
-            videos.forEach { video ->
+            videos.forEachIndexed { index, video ->
+                _uiState.update { it.copy(batchProgress = BatchProgress("刷新在线状态", index, videos.size)) }
                 val status = service.forceCheck(video)
                 when (status) {
                     OnlineVideoStatus.ONLINE -> online++
@@ -386,11 +407,15 @@ class VideoListViewModel @Inject constructor(
                     else -> unverifiable++
                 }
                 _uiState.update { state ->
-                    state.copy(videos = state.videos.map {
-                        if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
-                    })
+                    state.copy(
+                        videos = state.videos.map {
+                            if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
+                        },
+                        batchProgress = BatchProgress("刷新在线状态", index + 1, videos.size)
+                    )
                 }
             }
+            _uiState.update { it.copy(batchProgress = null) }
             showMessage("状态刷新完成：$online 在线、$unavailable 不可用、$unverifiable 无法核验")
         }
     }
@@ -401,7 +426,12 @@ class VideoListViewModel @Inject constructor(
         exitSelectionMode()
         val checker = integrityChecker ?: return
         viewModelScope.launch {
-            val results = checker.checkAll(videos)
+            val results = mutableListOf<MediaIntegrityChecker.CheckResult>()
+            videos.forEachIndexed { index, video ->
+                _uiState.update { it.copy(batchProgress = BatchProgress("检查文件完整性", index, videos.size)) }
+                results += checker.check(video)
+            }
+            _uiState.update { it.copy(batchProgress = null) }
             val ok = results.count { it.status == MediaIntegrityStatus.OK }
             val videoMissing = results.count { it.status == MediaIntegrityStatus.VIDEO_MISSING || it.status == MediaIntegrityStatus.BOTH_MISSING }
             val audioMissing = results.count { it.status == MediaIntegrityStatus.AUDIO_MISSING }

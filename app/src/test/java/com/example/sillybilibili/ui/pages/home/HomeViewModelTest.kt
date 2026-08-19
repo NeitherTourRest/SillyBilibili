@@ -323,6 +323,51 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `batchRefreshOnlineStatus reports progress and clears it at the end`() = runTest {
+        val videos = listOf(
+            Video(id = 11, avid = 1, cid = 1, title = "A", path = "/v1", audioPath = "/a1", size = 1, duration = 1),
+            Video(id = 12, avid = 2, cid = 2, title = "B", path = "/v2", audioPath = "/a2", size = 1, duration = 1),
+            Video(id = 13, avid = 3, cid = 3, title = "C", path = "/v3", audioPath = "/a3", size = 1, duration = 1)
+        )
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        val statusService = mockk<com.example.sillybilibili.service.OnlineVideoStatusService>()
+        coEvery { statusService.forceCheck(any()) } returns com.example.sillybilibili.domain.model.OnlineVideoStatus.ONLINE
+        viewModel = HomeViewModel(videoRepository, categoryRepository, videoScanService, null, null, statusService)
+        advanceUntilIdle()
+
+        viewModel.enterSelectionMode()
+        viewModel.toggleSelectAll()
+        viewModel.batchRefreshOnlineStatus()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.batchProgress)
+        assertTrue(viewModel.uiState.value.errorMessage!!.contains("3 在线"))
+        coVerify(exactly = 3) { statusService.forceCheck(any()) }
+    }
+
+    @Test
+    fun `batchCheckIntegrity checks each video and clears progress`() = runTest {
+        val videos = listOf(
+            Video(id = 21, avid = 1, cid = 1, title = "A", path = "/v1", audioPath = "/a1", size = 1, duration = 1),
+            Video(id = 22, avid = 2, cid = 2, title = "B", path = "/v2", audioPath = "/a2", size = 1, duration = 1)
+        )
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        val checker = mockk<com.example.sillybilibili.service.MediaIntegrityChecker>()
+        coEvery { checker.check(any()) } returns com.example.sillybilibili.service.MediaIntegrityChecker.CheckResult(0L, com.example.sillybilibili.service.MediaIntegrityStatus.OK)
+        viewModel = HomeViewModel(videoRepository, categoryRepository, videoScanService, null, null, null, checker)
+        advanceUntilIdle()
+
+        viewModel.enterSelectionMode()
+        viewModel.toggleSelectAll()
+        viewModel.batchCheckIntegrity()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.batchProgress)
+        assertTrue(viewModel.uiState.value.errorMessage!!.contains("2 完好"))
+        coVerify(exactly = 2) { checker.check(any()) }
+    }
+
+    @Test
     fun `toggleGridView flips grid view state`() = runTest {
         assertFalse(viewModel.uiState.value.gridViewEnabled)
         viewModel.toggleGridView()

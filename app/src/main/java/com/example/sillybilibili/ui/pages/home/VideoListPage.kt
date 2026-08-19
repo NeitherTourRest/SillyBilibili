@@ -73,7 +73,8 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                     hasSelection = uiState.selectedIds.isNotEmpty(),
                     onConvertToMp4 = viewModel::batchConvertToMp4,
                     onRefreshStatus = viewModel::batchRefreshOnlineStatus,
-                    onCheckIntegrity = viewModel::batchCheckIntegrity
+                    onCheckIntegrity = viewModel::batchCheckIntegrity,
+                    progress = uiState.batchProgress
                 )
             } else {
                 SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索此分类")

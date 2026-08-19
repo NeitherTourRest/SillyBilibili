@@ -197,7 +197,8 @@ fun HomePage(
                     hasSelection = uiState.selectedIds.isNotEmpty(),
                     onConvertToMp4 = viewModel::batchConvertToMp4,
                     onRefreshStatus = viewModel::batchRefreshOnlineStatus,
-                    onCheckIntegrity = viewModel::batchCheckIntegrity
+                    onCheckIntegrity = viewModel::batchCheckIntegrity,
+                    progress = uiState.batchProgress
                 )
             } else {
                 ScanProgressBanner()
