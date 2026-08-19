@@ -72,6 +72,7 @@ import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
 import com.example.sillybilibili.ui.components.SearchBar
+import com.example.sillybilibili.ui.components.SkeletonVideoList
 import com.example.sillybilibili.ui.components.VideoCard
 import com.example.sillybilibili.ui.components.rangeSelectDrag
 import com.example.sillybilibili.ui.components.VideoContextMenu
@@ -243,7 +244,7 @@ fun HomePage(
             }
 
             when {
-                uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion) }
+                uiState.isLoading -> SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp))
                 uiState.videos.isEmpty() -> EmptyVideoLibrary(onScan = onNavigateToScan)
                 else -> Box(Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange)) {
                     LazyColumn(

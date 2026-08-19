@@ -80,6 +80,7 @@ import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.FastScrollBar
+import com.example.sillybilibili.ui.components.SkeletonVideoList
 import com.example.sillybilibili.ui.theme.CyberVermilion
 import com.example.sillybilibili.ui.theme.DarkBackground
 import com.example.sillybilibili.ui.theme.DarkCard
@@ -144,9 +145,7 @@ fun ExportedPage(
             ExportedLibrarySummary(uiState)
 
             when {
-                uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.16f))
-                }
+                uiState.isLoading -> SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp))
                 uiState.videos.isEmpty() -> ExportedEmptyState(
                     hasActiveFilter = uiState.filter.isActive,
                     onReset = viewModel::resetFilter

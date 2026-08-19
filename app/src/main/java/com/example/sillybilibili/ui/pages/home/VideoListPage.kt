@@ -77,7 +77,7 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
             } else {
                 SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索此分类")
             }
-            if (uiState.isLoading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) }
+            if (uiState.isLoading) SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp))
             else if (uiState.videos.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("这个分类暂时没有视频", color = DarkTextSecondary, fontWeight = FontWeight.Bold) }
             else Column(Modifier.weight(1f)) {
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
