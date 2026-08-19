@@ -2,15 +2,24 @@ package com.example.sillybilibili.ui.pages.settings
 
 import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,12 +30,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -37,8 +50,12 @@ import androidx.core.os.LocaleListCompat
 import com.example.sillybilibili.R
 import com.example.sillybilibili.service.SettingsService
 import com.example.sillybilibili.ui.components.AppTopBar
+import com.example.sillybilibili.ui.theme.CyberGold
 import com.example.sillybilibili.ui.theme.CyberVermilion
 import com.example.sillybilibili.ui.theme.DarkBackground
+import com.example.sillybilibili.ui.theme.NeonCyan
+import com.example.sillybilibili.ui.theme.NeonGreen
+import com.example.sillybilibili.ui.theme.NeonPurple
 import com.example.sillybilibili.ui.theme.DarkCard
 import com.example.sillybilibili.ui.theme.DarkDivider
 import com.example.sillybilibili.ui.theme.DarkSurfaceVariant
@@ -63,7 +80,7 @@ fun SettingsPage(
         ) {
             Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = DarkCard)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(stringResource(R.string.language), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    SettingHeader(Icons.Default.Language, NeonPurple, stringResource(R.string.language))
                     Text(stringResource(R.string.language_description), style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         SettingsService.AppLanguage.entries.forEachIndexed { index, language ->
@@ -85,7 +102,7 @@ fun SettingsPage(
             }
             Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = DarkCard)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(stringResource(R.string.online_status_refresh), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    SettingHeader(Icons.Default.CloudSync, NeonCyan, stringResource(R.string.online_status_refresh))
                     Text(stringResource(R.string.online_status_refresh_description), style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
                     FilledTonalButton(
                         onClick = viewModel::refreshOnlineStatuses,
@@ -116,7 +133,7 @@ fun SettingsPage(
             }
             Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = DarkCard)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(stringResource(R.string.mp4_export_location), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    SettingHeader(Icons.Default.FolderOpen, CyberGold, stringResource(R.string.mp4_export_location))
                     Text(stringResource(R.string.mp4_export_description), style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
                     OutlinedTextField(
                         value = uiState.outputPath,
@@ -142,7 +159,7 @@ fun SettingsPage(
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.background_playback), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        SettingHeader(Icons.Default.Headphones, NeonGreen, stringResource(R.string.background_playback))
                         Text(stringResource(R.string.background_playback_description), style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
                     }
                     Switch(
@@ -152,5 +169,19 @@ fun SettingsPage(
                 }
             }
         }
+    }
+}
+
+/** 设置项标题行：圆角图标底 + 标题。 */
+@Composable
+private fun SettingHeader(icon: ImageVector, tint: Color, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = tint.copy(alpha = 0.14f)
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp), tint = tint)
+        }
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
     }
 }
