@@ -439,6 +439,26 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 全选当前搜索/筛选条件下的全部匹配视频（跨分页，含未加载的页）；
+     * 当前页已全部选中且没有更多数据时，再次点击取消全选。
+     */
+    fun toggleSelectAllFiltered() {
+        val state = _uiState.value
+        val allLoadedSelected = state.videos.isNotEmpty() && state.selectedIds.containsAll(state.videos.map { it.id })
+        if (allLoadedSelected && !state.hasMoreData) {
+            _uiState.update { it.copy(selectedIds = emptySet()) }
+            return
+        }
+        viewModelScope.launch {
+            val key = currentLoadKey()
+            val fs = _filterSnapshot.value
+            val all = loadPage(key.categoryId, key.query, fs, page = 0, pageSize = Int.MAX_VALUE)
+            _uiState.update { it.copy(selectedIds = all.map { it.id }.toSet()) }
+            if (all.size > state.videos.size) showMessage("已全选 ${all.size} 个匹配视频")
+        }
+    }
+
     /** 拖拽连续选择：选中 [fromIndex, toIndex]（含端点）区间内的视频，已选中的保持不变。 */
     fun selectRange(fromIndex: Int, toIndex: Int) {
         _uiState.update { state ->

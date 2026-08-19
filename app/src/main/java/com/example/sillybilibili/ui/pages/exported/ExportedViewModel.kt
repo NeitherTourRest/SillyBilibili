@@ -120,6 +120,15 @@ class ExportedViewModel @Inject constructor(
         _uiState.update { it.copy(isSelectionMode = false, selectedIds = emptySet()) }
     }
 
+    /** 全选当前搜索/筛选条件下的全部导出视频；已全部选中时取消全选。 */
+    fun toggleSelectAll() {
+        _uiState.update { state ->
+            val allIds = state.videos.map { it.id }.toSet()
+            val allSelected = state.selectedIds.containsAll(allIds)
+            state.copy(selectedIds = if (allSelected) emptySet() else allIds)
+        }
+    }
+
     fun selectedVideos(): List<Video> {
         val selectedIds = _uiState.value.selectedIds
         return _uiState.value.videos.filter { it.id in selectedIds }

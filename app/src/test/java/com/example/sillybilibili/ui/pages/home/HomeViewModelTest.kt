@@ -289,6 +289,40 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `toggleSelectAllFiltered selects all matching videos across pages`() = runTest {
+        val page1 = List(3) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        val all = List(8) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(Int.MAX_VALUE)) } returns all
+        advanceUntilIdle()
+
+        viewModel.enterSelectionMode()
+        viewModel.toggleSelectAllFiltered()
+        advanceUntilIdle()
+
+        assertEquals(all.map { it.id }.toSet(), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `toggleSelectAllFiltered deselects when everything is selected and loaded`() = runTest {
+        val videos = List(3) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        advanceUntilIdle()
+
+        viewModel.toggleSelectAllFiltered()
+        advanceUntilIdle()
+        assertEquals(setOf(1L, 2L, 3L), viewModel.uiState.value.selectedIds)
+
+        viewModel.toggleSelectAllFiltered()
+        assertTrue(viewModel.uiState.value.selectedIds.isEmpty())
+    }
+
+    @Test
     fun `toggleGridView flips grid view state`() = runTest {
         assertFalse(viewModel.uiState.value.gridViewEnabled)
         viewModel.toggleGridView()

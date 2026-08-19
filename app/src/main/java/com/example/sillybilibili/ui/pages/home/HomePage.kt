@@ -160,7 +160,7 @@ fun HomePage(
                 subtitle = if (uiState.isSelectionMode) null else stringResource(R.string.home_subtitle)
             ) {
                 if (uiState.isSelectionMode) {
-                    TextButton(onClick = viewModel::toggleSelectAll) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    TextButton(onClick = viewModel::toggleSelectAllFiltered) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
                     IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, "完成选择", tint = DarkTextSecondary) }
                 } else {
                     TextButton(onClick = viewModel::enterSelectionMode, enabled = uiState.videos.isNotEmpty()) { Text("多选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }

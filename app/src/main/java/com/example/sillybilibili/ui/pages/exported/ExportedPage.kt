@@ -124,6 +124,7 @@ fun ExportedPage(
                 uiState = uiState,
                 onBack = { if (uiState.isSelectionMode) viewModel.clearSelection() else onNavigateBack() },
                 onStartSelection = viewModel::enterSelectionMode,
+                onSelectAll = viewModel::toggleSelectAll,
                 onRefresh = { viewModel.refreshExternalChanges() },
                 onBatchCategory = { showBatchCategory = true },
                 onBatchDelete = { viewModel.showDeleteConfirm(viewModel.selectedVideos()) }
@@ -267,6 +268,7 @@ private fun ExportedTopBar(
     uiState: ExportedUiState,
     onBack: () -> Unit,
     onStartSelection: () -> Unit,
+    onSelectAll: () -> Unit,
     onRefresh: () -> Unit,
     onBatchCategory: () -> Unit,
     onBatchDelete: () -> Unit
@@ -283,6 +285,7 @@ private fun ExportedTopBar(
         },
         actions = {
             if (uiState.isSelectionMode) {
+                TextButton(onClick = onSelectAll, enabled = uiState.videos.isNotEmpty()) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
                 IconButton(onClick = onBatchCategory, enabled = uiState.selectedIds.isNotEmpty()) { Icon(Icons.Default.Category, "批量分类") }
                 IconButton(onClick = onBatchDelete, enabled = uiState.selectedIds.isNotEmpty()) { Icon(Icons.Default.Delete, "批量删除", tint = NeonRed) }
             } else {
