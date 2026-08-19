@@ -111,6 +111,7 @@ fun HomePage(
     // 卡片参数未变化时 Compose 可以直接跳过重组。
     val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
     val latestVideos by rememberUpdatedState(uiState.videos)
+    val categoryById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
     LaunchedEffect(uiState.currentPage) {
         // A page owns only 40 cards. Resetting here prevents Compose from retaining the
         // former page's tail position and immediately advancing again.
@@ -259,7 +260,8 @@ fun HomePage(
                                 onOnlineStatusRequested = viewModel::requestOnlineStatus,
                                 selectionMode = uiState.isSelectionMode,
                                 selected = video.id in uiState.selectedIds,
-                                onSelect = { viewModel.toggleSelection(video.id) }
+                                onSelect = { viewModel.toggleSelection(video.id) },
+                                category = categoryById[video.categoryId]
                             )
                         }
                         if (uiState.isLoadingMore) item(key = "home-switching-page", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }

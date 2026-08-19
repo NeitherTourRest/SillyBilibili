@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import com.example.sillybilibili.domain.model.Category
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -66,6 +67,8 @@ fun VideoCard(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onSelect: () -> Unit = {},
+    /** 视频所属分类（彩色小标签显示）。 */
+    category: Category? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = if (video.isVertical) NeonPurple else CyberVermilion
@@ -111,7 +114,8 @@ fun VideoCard(
                 }
                 Text(video.title, style = MaterialTheme.typography.titleSmall, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // 时长已移到缩略图角标，这里只保留大小与在线状态
+                    // 时长已移到缩略图角标，这里保留分类、大小与在线状态
+                    category?.let { CategoryBadge(it) }
                     if (video.duration <= 0L) VideoMeta(video.formattedDuration)
                     VideoMeta(video.formattedSize)
                     OnlineStatusBadge(video.onlineStatus)
@@ -165,6 +169,26 @@ private fun VideoThumbnail(video: Video, accent: Color) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CategoryBadge(category: Category) {
+    val color = Color(category.color)
+    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.14f)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
+            Text(
+                category.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                maxLines = 1
+            )
         }
     }
 }

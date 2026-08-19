@@ -19,7 +19,9 @@ import com.example.sillybilibili.service.MediaIntegrityChecker
 import com.example.sillybilibili.service.MediaIntegrityStatus
 import com.example.sillybilibili.service.OnlineVideoStatusService
 import com.example.sillybilibili.service.VideoConverterService
+import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.OnlineVideoStatus
+import com.example.sillybilibili.domain.repository.CategoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +51,8 @@ class PlayerViewModel @Inject constructor(
     private val videoConverterService: VideoConverterService,
     private val conversionJobRegistry: ConversionJobRegistry,
     private val videoRepository: VideoRepository,
-    private val integrityChecker: MediaIntegrityChecker
+    private val integrityChecker: MediaIntegrityChecker,
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(PlayerPreparationState())
     val state: StateFlow<PlayerPreparationState> = _state.asStateFlow()
@@ -62,6 +65,9 @@ class PlayerViewModel @Inject constructor(
     /** 最近一次文件完整性检查结果（null = 尚未检查）。 */
     private val _integrityStatus = MutableStateFlow<MediaIntegrityStatus?>(null)
     val integrityStatus: StateFlow<MediaIntegrityStatus?> = _integrityStatus.asStateFlow()
+    /** 当前视频所属分类（用于播放页展示）。 */
+    private val _currentCategory = MutableStateFlow<Category?>(null)
+    val currentCategory: StateFlow<Category?> = _currentCategory.asStateFlow()
     private val _conversionProgress = MutableStateFlow<ConversionProgress?>(null)
     val conversionProgress: StateFlow<ConversionProgress?> = _conversionProgress.asStateFlow()
     private val _swipePreviewFrames = MutableStateFlow<Map<Int, Bitmap>>(emptyMap())
@@ -129,7 +135,9 @@ class PlayerViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            _currentVideo.value = videoRepository.getVideoById(videoId)
+            val video = videoRepository.getVideoById(videoId)
+            _currentVideo.value = video
+            _currentCategory.value = video?.categoryId?.let { categoryRepository.getCategoryById(it) }
         }
     }
 

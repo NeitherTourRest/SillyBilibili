@@ -36,6 +36,7 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
 
     val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
     val latestVideos by rememberUpdatedState(uiState.videos)
+    val categoryById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
     LaunchedEffect(categoryId) { viewModel.setCategoryId(categoryId) }
     LaunchedEffect(listState) { snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { if (it != null && it >= uiState.videos.size - 5) viewModel.loadMore() } }
 
@@ -89,7 +90,8 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                             onOnlineStatusRequested = viewModel::requestOnlineStatus,
                             selectionMode = uiState.isSelectionMode,
                             selected = video.id in uiState.selectedIds,
-                            onSelect = { viewModel.toggleSelection(video.id) }
+                            onSelect = { viewModel.toggleSelection(video.id) },
+                            category = categoryById[video.categoryId]
                         )
                     }
                     if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) } }

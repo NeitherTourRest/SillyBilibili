@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -130,6 +131,7 @@ fun PlayerPage(
     val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsState()
     val onlineStatus by viewModel.onlineStatus.collectAsState()
     val currentVideo by viewModel.currentVideo.collectAsState()
+    val currentCategory by viewModel.currentCategory.collectAsState()
     val integrityStatus by viewModel.integrityStatus.collectAsState()
     val conversionProgress by viewModel.conversionProgress.collectAsState()
     val swipePreviewFrames by viewModel.swipePreviewFrames.collectAsState()
@@ -533,6 +535,7 @@ fun PlayerPage(
                     onlineStatus = onlineStatus,
                     activeItem = queue?.items?.getOrNull(activeIndex),
                     currentVideo = currentVideo,
+                    currentCategory = currentCategory,
                     integrityStatus = integrityStatus,
                     conversionProgress = conversionProgress,
                     onConvertToMp4 = viewModel::convertToMp4,
@@ -830,6 +833,7 @@ private fun PlayerInfoPanel(
     onlineStatus: com.example.sillybilibili.domain.model.OnlineVideoStatus,
     activeItem: PlaybackQueueItem?,
     currentVideo: com.example.sillybilibili.domain.model.Video?,
+    currentCategory: com.example.sillybilibili.domain.model.Category?,
     integrityStatus: com.example.sillybilibili.service.MediaIntegrityStatus?,
     conversionProgress: com.example.sillybilibili.domain.model.ConversionProgress?,
     onConvertToMp4: (PlaybackQueueItem) -> Unit,
@@ -847,6 +851,23 @@ private fun PlayerInfoPanel(
         Text(title.ifBlank { "正在播放" }, color = DarkTextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("本地缓存 · 第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+            currentCategory?.let { cat ->
+                val catColor = Color(cat.color)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = catColor.copy(alpha = 0.14f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, catColor.copy(alpha = 0.36f))
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(catColor))
+                        Text(cat.name, style = MaterialTheme.typography.labelSmall, color = catColor, maxLines = 1)
+                    }
+                }
+            }
             OnlineStatusBadge(onlineStatus)
         }
         val sourceType = when {
