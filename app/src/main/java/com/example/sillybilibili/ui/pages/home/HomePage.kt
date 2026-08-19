@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,7 +27,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
@@ -74,6 +81,7 @@ import com.example.sillybilibili.ui.components.FilterSheet
 import com.example.sillybilibili.ui.components.SearchBar
 import com.example.sillybilibili.ui.components.SkeletonVideoList
 import com.example.sillybilibili.ui.components.VideoCard
+import com.example.sillybilibili.ui.components.VideoGridCard
 import com.example.sillybilibili.ui.components.rangeSelectDrag
 import com.example.sillybilibili.ui.components.VideoContextMenu
 import com.example.sillybilibili.ui.pages.scan.ScanViewModel
@@ -99,6 +107,7 @@ fun HomePage(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var contextMenuVideo by remember { mutableStateOf<Video?>(null) }
@@ -151,6 +160,12 @@ fun HomePage(
                         BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) {
                             Icon(Icons.Default.FilterList, contentDescription = "筛选")
                         }
+                    }
+                    IconButton(onClick = viewModel::toggleGridView) {
+                        Icon(
+                            if (uiState.gridViewEnabled) Icons.Filled.ViewAgenda else Icons.Default.GridView,
+                            contentDescription = if (uiState.gridViewEnabled) "切换到列表视图" else "切换到宫格视图"
+                        )
                     }
                     IconButton(onClick = onNavigateToScan) { Icon(Icons.Default.YoutubeSearchedFor, contentDescription = stringResource(R.string.scan_videos)) }
                     Box {
@@ -246,6 +261,31 @@ fun HomePage(
             when {
                 uiState.isLoading -> SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp))
                 uiState.videos.isEmpty() -> EmptyVideoLibrary(onScan = onNavigateToScan)
+                uiState.gridViewEnabled -> Box(Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, gridState, viewModel::selectRange)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        gridItems(uiState.videos, key = { it.id }, contentType = { "video-grid" }) { video ->
+                            VideoGridCard(
+                                video = video,
+                                onClick = { latestOnNavigate(video, latestVideos) },
+                                onLongClick = { contextMenuVideo = video },
+                                onCoverRequested = viewModel::requestCover,
+                                onOnlineStatusRequested = viewModel::requestOnlineStatus,
+                                selectionMode = uiState.isSelectionMode,
+                                selected = video.id in uiState.selectedIds,
+                                onSelect = { viewModel.toggleSelection(video.id) },
+                                category = categoryById[video.categoryId]
+                            )
+                        }
+                        if (uiState.isLoadingMore) item(key = "home-switching-page-grid", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
+                    }
+                }
                 else -> Box(Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange)) {
                     LazyColumn(
                         state = listState,

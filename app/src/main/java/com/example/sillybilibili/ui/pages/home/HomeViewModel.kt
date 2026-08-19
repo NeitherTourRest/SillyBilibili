@@ -65,6 +65,8 @@ data class HomeUiState(
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
     val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null,
     val isSelectionMode: Boolean = false, val selectedIds: Set<Long> = emptySet(),
+    /** 首页宫格视图开关（false = 列表视图）。 */
+    val gridViewEnabled: Boolean = false,
     /** 扫描库中的视频总数（sourceAvailable = 1），用于页头位置指示。 */
     val totalVideoCount: Int = 0
 ) { companion object { const val PAGE_SIZE = 40 } }
@@ -153,7 +155,10 @@ class HomeViewModel @Inject constructor(
 
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
-    init { loadCategories(); loadVideos(); reconcileExternalFiles() }
+    init {
+        loadCategories(); loadVideos(); reconcileExternalFiles()
+        _uiState.update { it.copy(gridViewEnabled = settingsService?.gridViewEnabled ?: false) }
+    }
 
     private fun reconcileExternalFiles() {
         externalMediaSyncService ?: return
@@ -409,6 +414,13 @@ class HomeViewModel @Inject constructor(
 
     fun exitSelectionMode() {
         _uiState.update { it.copy(isSelectionMode = false, selectedIds = emptySet()) }
+    }
+
+    /** 切换首页列表/宫格视图，选择持久化到设置。 */
+    fun toggleGridView() {
+        val next = !_uiState.value.gridViewEnabled
+        settingsService?.gridViewEnabled = next
+        _uiState.update { it.copy(gridViewEnabled = next) }
     }
 
     fun toggleSelection(videoId: Long) {

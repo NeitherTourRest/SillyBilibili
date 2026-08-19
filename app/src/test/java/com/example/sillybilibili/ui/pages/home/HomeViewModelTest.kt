@@ -289,6 +289,15 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `toggleGridView flips grid view state`() = runTest {
+        assertFalse(viewModel.uiState.value.gridViewEnabled)
+        viewModel.toggleGridView()
+        assertTrue(viewModel.uiState.value.gridViewEnabled)
+        viewModel.toggleGridView()
+        assertFalse(viewModel.uiState.value.gridViewEnabled)
+    }
+
+    @Test
     fun `selection mode toggles, selects all and reports selection`() = runTest {
         val videos = listOf(
             Video(id = 11, avid = 1, cid = 1, title = "A", path = "/v1", audioPath = "/a1", size = 1, duration = 1),

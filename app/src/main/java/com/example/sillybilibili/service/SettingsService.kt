@@ -1,4 +1,4 @@
-﻿package com.example.sillybilibili.service
+package com.example.sillybilibili.service
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -19,6 +19,7 @@ class SettingsService @Inject constructor(
         private const val KEY_AUTO_SCAN = "auto_scan"
         private const val KEY_BACKGROUND_PLAYBACK = "background_playback"
         private const val KEY_APP_LANGUAGE = "app_language"
+        private const val KEY_GRID_VIEW = "grid_view"
     }
 
     enum class AppLanguage(val languageTag: String) {
@@ -58,6 +59,11 @@ class SettingsService @Inject constructor(
             prefs.edit().putBoolean(KEY_BACKGROUND_PLAYBACK, value).apply()
             _backgroundPlaybackEnabled.value = value
         }
+
+    /** 首页宫格视图开关（列表视图为默认）。 */
+    var gridViewEnabled: Boolean
+        get() = prefs.getBoolean(KEY_GRID_VIEW, false)
+        set(value) = prefs.edit().putBoolean(KEY_GRID_VIEW, value).apply()
 
     /** App language is independent of the device locale and defaults to Simplified Chinese. */
     var appLanguage: AppLanguage
