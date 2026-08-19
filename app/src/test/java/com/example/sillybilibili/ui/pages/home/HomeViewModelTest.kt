@@ -3,6 +3,8 @@ package com.example.sillybilibili.ui.pages.home
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
+import com.example.sillybilibili.service.COVER_RETRY_INTERVAL_MS
+import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.VideoScanService
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -195,6 +197,44 @@ class HomeViewModelTest {
         viewModel.clearError()
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `requestCover success is requested only once per session`() = runTest {
+        val coverService = mockk<CoverCacheService>()
+        coEvery { coverService.cacheCover(any()) } returns "/cache/covers/1_2.jpg"
+        viewModel = HomeViewModel(videoRepository, categoryRepository, videoScanService, coverService)
+        val video = Video(id = 1, avid = 1, cid = 2, title = "T", path = "/v", audioPath = "/a", size = 1, duration = 1)
+
+        viewModel.requestCover(video)
+        advanceUntilIdle()
+        viewModel.requestCover(video)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { coverService.cacheCover(video) }
+    }
+
+    @Test
+    fun `requestCover failure is rate limited and retried after interval`() = runTest {
+        val coverService = mockk<CoverCacheService>()
+        coEvery { coverService.cacheCover(any()) } returns null
+        viewModel = HomeViewModel(videoRepository, categoryRepository, videoScanService, coverService)
+        var fakeNow = 1_000_000L
+        viewModel.coverClock = { fakeNow }
+        val video = Video(id = 2, avid = 2, cid = 3, title = "T", path = "/v", audioPath = "/a", size = 1, duration = 1)
+
+        viewModel.requestCover(video)
+        advanceUntilIdle()
+        // 失败后立即重试被限频拦截
+        viewModel.requestCover(video)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { coverService.cacheCover(video) }
+
+        // 超过重试间隔后允许再次尝试
+        fakeNow += COVER_RETRY_INTERVAL_MS + 1_000
+        viewModel.requestCover(video)
+        advanceUntilIdle()
+        coVerify(exactly = 2) { coverService.cacheCover(video) }
     }
 }
 

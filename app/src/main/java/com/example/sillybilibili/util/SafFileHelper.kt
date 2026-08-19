@@ -11,6 +11,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * 去掉 document id 的最后一个路径段，得到父目录 id；根目录返回 null。
+ * 例如 "primary:a/b/c/cover.jpg" -> "primary:a/b/c"。
+ */
+internal fun parentDocumentId(documentId: String): String? {
+    val slash = documentId.lastIndexOf('/')
+    if (slash <= 0) return null
+    return documentId.substring(0, slash).takeIf { it.isNotEmpty() }
+}
+
+/**
  * SAF (Storage Access Framework) file access — alternative to Shizuku.
  * User selects the Bilibili download directory via system file picker.
  */
@@ -73,6 +83,16 @@ class SafFileHelper @Inject constructor(
 
     fun findChild(parentUri: Uri, name: String): Uri? =
         document(parentUri)?.findFile(name)?.uri
+
+    /**
+     * 由子文件的 document URI 推导同一 provider 下父目录的 URI。
+     * 用于封面文件名不是 cover.jpg 时，回退到 cid 目录里寻找真实封面。
+     */
+    fun parentDocumentUri(uri: Uri): Uri? {
+        val id = DocumentsContract.getDocumentId(uri) ?: return null
+        val parent = parentDocumentId(id) ?: return null
+        return DocumentsContract.buildDocumentUri(uri.authority, parent)
+    }
 
     /** Stable document URI for the root of a persisted SAF tree. */
     fun rootDocumentUri(treeUri: Uri): Uri =

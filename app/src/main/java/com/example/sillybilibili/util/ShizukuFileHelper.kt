@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // ShizukuFileHelper.kt — 文件访问"特权通道"
 // ============================================================
 // 需要这个文件的原因是：Android 11+ 禁止 App 直接读取
@@ -648,13 +648,17 @@ class ShizukuFileHelper @Inject constructor(
      * Unlike copyFile() which uses the cp shell command, this method reads raw bytes
      * in small chunks and writes them directly to the destination stream.
      * This avoids loading the entire file into memory and works even when cp fails.
-     * @return true if the destination file exists and its length matches the source
+     *
+     * @param maxBytes 只复制文件前 maxBytes 字节（截断副本）。抽视频首帧时只需文件头，
+     *   避免把整个视频（可能数百 MB）复制到应用缓存。默认复制完整文件。
+     * @return true if the destination file exists and its length matches the expected size
      */
-    fun copyFileChunked(src: String, dest: String, useShizuku: Boolean = true): Boolean {
+    fun copyFileChunked(src: String, dest: String, useShizuku: Boolean = true, maxBytes: Long = Long.MAX_VALUE): Boolean {
         if (!useShizuku || !isShizukuAvailable()) {
             return try {
-                File(src).copyTo(File(dest), overwrite = true)
-                File(dest).length() == File(src).length()
+                copyLocalPrefix(File(src), File(dest), maxBytes)
+                val expected = minOf(File(src).length(), maxBytes)
+                expected > 0 && File(dest).length() == expected
             } catch (e: Exception) {
                 Log.w(TAG, "copyFileChunked local fallback failed", e)
                 false
@@ -667,13 +671,14 @@ class ShizukuFileHelper @Inject constructor(
             return false
         }
 
+        val targetLen = minOf(srcLen, maxBytes)
         val destFile = File(dest)
         return try {
             FileOutputStream(destFile).use { out ->
                 val chunkSize = 524288L // 512KB per chunk, well under 1MB Binder limit
                 var offset = 0L
-                while (offset < srcLen) {
-                    val remaining = minOf(chunkSize, srcLen - offset)
+                while (offset < targetLen) {
+                    val remaining = minOf(chunkSize, targetLen - offset)
                     val base64 = execSh(
                         "dd if='${escapeSingleQuote(src)}' bs=1 skip=$offset count=$remaining 2>/dev/null | base64",
                         useShizuku
@@ -688,8 +693,8 @@ class ShizukuFileHelper @Inject constructor(
                 }
             }
             val dstLen = destFile.length()
-            if (dstLen != srcLen) {
-                Log.w(TAG, "copyFileChunked: length mismatch src=$srcLen dst=$dstLen")
+            if (dstLen != targetLen) {
+                Log.w(TAG, "copyFileChunked: length mismatch expected=$targetLen dst=$dstLen")
                 destFile.delete()
                 false
             } else {
@@ -702,7 +707,25 @@ class ShizukuFileHelper @Inject constructor(
         }
     }
 
-    // 分块读取二进制文件，逐 chunk 解码 base64 → 拼接（大文件适用，不一次加载全部到内存）
+    /** 本地文件复制；maxBytes 限制时只复制文件头。 */
+    private fun copyLocalPrefix(src: File, dest: File, maxBytes: Long) {
+        if (maxBytes >= Long.MAX_VALUE) {
+            src.copyTo(dest, overwrite = true)
+            return
+        }
+        java.io.RandomAccessFile(src, "r").use { raf ->
+            FileOutputStream(dest).use { out ->
+                val buffer = ByteArray(1 shl 16)
+                var remaining = minOf(raf.length(), maxBytes)
+                while (remaining > 0) {
+                    val count = raf.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                    if (count < 0) break
+                    out.write(buffer, 0, count)
+                    remaining -= count
+                }
+            }
+        }
+    }
     fun readBinaryFileChunked(path: String, useShizuku: Boolean = true): ByteArray? {
         if (!useShizuku || !isShizukuAvailable()) {
             return try { File(path).readBytes() } catch (e: Exception) { null }

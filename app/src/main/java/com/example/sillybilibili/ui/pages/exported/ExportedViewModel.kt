@@ -8,6 +8,7 @@ import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.ExternalMediaSyncService
+import com.example.sillybilibili.service.COVER_RETRY_INTERVAL_MS
 import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
@@ -51,8 +52,9 @@ class ExportedViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ExportedUiState(isLoading = true))
     val uiState: StateFlow<ExportedUiState> = _uiState.asStateFlow()
 
-    /** 每视频每会话只请求一次封面，限制并发，避免快速滚动时反复复制 m4s。 */
+    /** 封面成功请求会话内去重；失败限频重试；并发受限，避免快速滚动时反复复制 m4s。 */
     private val coverRequested = HashSet<Long>()
+    private val coverFailedAt = HashMap<Long, Long>()
     private val coverSemaphore = Semaphore(2)
 
     init {
@@ -190,13 +192,19 @@ class ExportedViewModel @Inject constructor(
     }
 
     fun requestCover(video: Video) {
-        if (video.coverPath != null || !coverRequested.add(video.id)) return
+        if (video.id in coverRequested) return
+        val lastFail = coverFailedAt[video.id]
+        if (lastFail != null && System.currentTimeMillis() - lastFail < COVER_RETRY_INTERVAL_MS) return
         viewModelScope.launch {
             coverSemaphore.withPermit {
-                coverCacheService.cacheCover(video)?.let { cachedPath ->
-                    if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
-                    videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                val cachedPath = coverCacheService.cacheCover(video)
+                if (cachedPath == null) {
+                    coverFailedAt[video.id] = System.currentTimeMillis()
+                    return@withPermit
                 }
+                coverRequested.add(video.id)
+                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@withPermit
+                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
             }
         }
     }

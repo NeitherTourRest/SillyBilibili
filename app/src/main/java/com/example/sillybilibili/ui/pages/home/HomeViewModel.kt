@@ -9,6 +9,7 @@ import com.example.sillybilibili.domain.repository.VideoRepository
 import com.example.sillybilibili.service.VideoScanService
 import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.ExternalMediaSyncService
+import com.example.sillybilibili.service.COVER_RETRY_INTERVAL_MS
 import com.example.sillybilibili.service.OnlineVideoStatusService
 import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -115,14 +116,18 @@ class HomeViewModel @Inject constructor(
     private var prefetchedPage: PrefetchedHomePage? = null
 
     /**
-     * 卡片进入屏幕时每个视频只请求一次（当前会话内）。快速滚动会让大量卡片同时进入
-     * 组合，去重后这些重活不会反复排队；再叠加信号量限制并发，避免首屏一次性打爆
-     * 磁盘 IO（无封面时 CoverCacheService 可能整段复制 m4s）和网络（在线核验）。
+     * 卡片进入屏幕时每个视频的封面/在线核验在会话内只做必要的次数：成功的请求永久去重，
+     * 失败的（源封面缺失且抽帧失败）限频重试，避免滚动时反复排队；信号量限制并发，
+     * 避免首屏一次性打爆磁盘 IO（抽帧需复制 m4s）和网络。
      */
     private val coverRequested = HashSet<Long>()
     private val statusRequested = HashSet<Long>()
+    private val coverFailedAt = HashMap<Long, Long>()
     private val coverSemaphore = Semaphore(2)
     private val statusSemaphore = Semaphore(3)
+
+    /** 可注入的时间源（测试中用于推进限频重试间隔）。 */
+    internal var coverClock: () -> Long = System::currentTimeMillis
 
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
@@ -135,19 +140,24 @@ class HomeViewModel @Inject constructor(
 
     fun requestCover(video: Video) {
         val service = coverCacheService ?: return
-        // 已持久化的封面不再重复校验；同一视频本会话只请求一次，
-        // 避免滚动时卡片反复进出组合触发无谓的文件复制。
-        if (video.coverPath != null || !coverRequested.add(video.id)) return
+        if (video.id in coverRequested) return
+        val lastFail = coverFailedAt[video.id]
+        if (lastFail != null && coverClock() - lastFail < COVER_RETRY_INTERVAL_MS) return
         viewModelScope.launch {
             coverSemaphore.withPermit {
-                service.cacheCover(video)?.let { cachedPath ->
-                    if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
-                    videoRepository.updateVideo(video.copy(coverPath = cachedPath))
-                    _uiState.update { state ->
-                        state.copy(videos = state.videos.map {
-                            if (it.id == video.id) it.copy(coverPath = cachedPath) else it
-                        })
-                    }
+                val cachedPath = service.cacheCover(video)
+                if (cachedPath == null) {
+                    // 失败限频重试：间隔过后卡片再次进入组合时会重新尝试生成封面
+                    coverFailedAt[video.id] = coverClock()
+                    return@withPermit
+                }
+                coverRequested.add(video.id)
+                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@withPermit
+                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                _uiState.update { state ->
+                    state.copy(videos = state.videos.map {
+                        if (it.id == video.id) it.copy(coverPath = cachedPath) else it
+                    })
                 }
             }
         }
