@@ -633,31 +633,31 @@ private fun PlaybackControls(
     modifier: Modifier = Modifier
 ) {
     val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val overlayColor = Color(0xE9121622).copy(alpha = if (isFullscreen) 0.92f else 0.86f)
+    val overlayColor = Color(0xE9121622).copy(alpha = if (isFullscreen) 0.84f else 0.78f)
 
     Column(
         modifier = modifier.fillMaxSize().zIndex(2f),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 7.dp),
-            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(14.dp),
             color = overlayColor,
-            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder.copy(alpha = 0.9f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder.copy(alpha = 0.52f))
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
+                modifier = Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier.size(36.dp).background(CyberVermilion.copy(alpha = 0.22f), CircleShape)
-                ) { Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White, modifier = Modifier.size(20.dp)) }
-                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                    modifier = Modifier.size(30.dp).background(CyberVermilion.copy(alpha = 0.22f), CircleShape)
+                ) { Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White, modifier = Modifier.size(18.dp)) }
+                Column(Modifier.weight(1f).padding(horizontal = 7.dp)) {
                     Text(
                         text = title.ifBlank { "正在播放" },
                         color = Color.White,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -668,21 +668,21 @@ private fun PlaybackControls(
         }
 
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 0.dp, end = 8.dp, bottom = 7.dp),
-            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, top = 0.dp, end = 10.dp, bottom = 8.dp),
+            shape = RoundedCornerShape(14.dp),
             color = overlayColor,
-            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder.copy(alpha = 0.9f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder.copy(alpha = 0.52f))
         ) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp),
+                    modifier = Modifier.fillMaxWidth().height(22.dp).padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(formatPlaybackTime(positionMs), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelSmall)
                     Slider(
                         value = progress,
                         onValueChange = onSeek,
-                        modifier = Modifier.weight(1f).height(20.dp).padding(horizontal = 6.dp),
+                        modifier = Modifier.weight(1f).height(14.dp).padding(horizontal = 7.dp),
                         colors = SliderDefaults.colors(
                             thumbColor = CyberVermilionLight,
                             activeTrackColor = CyberVermilion,
@@ -692,27 +692,27 @@ private fun PlaybackControls(
                     Text(formatPlaybackTime(durationMs), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelSmall)
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onPrevious, enabled = canGoPrevious, modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "上一集", tint = Color.White.copy(alpha = if (canGoPrevious) 1f else 0.35f), modifier = Modifier.size(20.dp))
+                    IconButton(onClick = onPrevious, enabled = canGoPrevious, modifier = Modifier.size(30.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "上一集", tint = Color.White.copy(alpha = if (canGoPrevious) 1f else 0.35f), modifier = Modifier.size(17.dp))
                     }
-                    IconButton(onClick = onTogglePlayback, modifier = Modifier.size(40.dp).background(CyberVermilion, CircleShape)) {
-                        Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(25.dp))
+                    IconButton(onClick = onTogglePlayback, modifier = Modifier.size(34.dp).background(CyberVermilion, CircleShape)) {
+                        Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "下一集", tint = Color.White.copy(alpha = if (canGoNext) 1f else 0.35f), modifier = Modifier.size(20.dp))
+                    IconButton(onClick = onNext, enabled = canGoNext, modifier = Modifier.size(30.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "下一集", tint = Color.White.copy(alpha = if (canGoNext) 1f else 0.35f), modifier = Modifier.size(17.dp))
                     }
                     Spacer(Modifier.weight(1f))
                     CompactControlPill(text = "选集", onClick = onShowEpisodes)
                     Spacer(Modifier.width(4.dp))
                     CompactControlPill(text = "${playbackSpeed}×", onClick = onChangeSpeed, icon = {
-                        Icon(Icons.Default.Speed, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Speed, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                     })
                     Spacer(Modifier.width(4.dp))
-                    IconButton(onClick = onToggleFullscreen, modifier = Modifier.size(34.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
-                        Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = if (isFullscreen) "退出全屏" else "全屏", tint = Color.White, modifier = Modifier.size(19.dp))
+                    IconButton(onClick = onToggleFullscreen, modifier = Modifier.size(30.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)) {
+                        Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = if (isFullscreen) "退出全屏" else "全屏", tint = Color.White, modifier = Modifier.size(17.dp))
                     }
                 }
             }
@@ -727,17 +727,17 @@ private fun CompactControlPill(
     icon: (@Composable () -> Unit)? = null
 ) {
     Surface(
-        modifier = Modifier.height(32.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.height(28.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
         color = Color.White.copy(alpha = 0.1f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 9.dp),
+            modifier = Modifier.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             icon?.invoke()
-            Text(text, color = Color.White, style = MaterialTheme.typography.labelMedium)
+            Text(text, color = Color.White, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
