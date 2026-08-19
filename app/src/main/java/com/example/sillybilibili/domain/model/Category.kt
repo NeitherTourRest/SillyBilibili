@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Category.kt — 分类数据模型
 // ============================================================
 // 用户创建的自定义分类。比如"游戏"、"音乐"、"教程"等。
@@ -8,7 +8,10 @@
 
 package com.example.sillybilibili.domain.model
 
+import androidx.compose.runtime.Immutable
+
 // data class 自动生成 equals/hashCode/toString/copy
+@Immutable
 data class Category(
     val id: Long = 0,               // 数据库主键
     val name: String,               // 分类名称（如 "游戏"、"音乐"）

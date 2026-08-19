@@ -33,6 +33,8 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
     var assignDialogVideo by remember { mutableStateOf<Video?>(null) }
     var deleteConfirmVideo by remember { mutableStateOf<Video?>(null) }
 
+    val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
+    val latestVideos by rememberUpdatedState(uiState.videos)
     LaunchedEffect(categoryId) { viewModel.setCategoryId(categoryId) }
     LaunchedEffect(listState) { snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { if (it != null && it >= uiState.videos.size - 5) viewModel.loadMore() } }
 
@@ -48,7 +50,15 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
             else if (uiState.videos.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("这个分类暂时没有视频", color = DarkTextSecondary, fontWeight = FontWeight.Bold) }
             else Column(Modifier.weight(1f)) {
                 LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(uiState.videos, key = { it.id }) { video -> VideoCard(video = video, onClick = { onNavigateToPlayer(video, uiState.videos) }, onLongClick = { contextMenuVideo = video }, onCoverRequested = viewModel::requestCover, onOnlineStatusRequested = viewModel::requestOnlineStatus) }
+                    items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
+                        VideoCard(
+                            video = video,
+                            onClick = { latestOnNavigate(video, latestVideos) },
+                            onLongClick = { contextMenuVideo = video },
+                            onCoverRequested = viewModel::requestCover,
+                            onOnlineStatusRequested = viewModel::requestOnlineStatus
+                        )
+                    }
                     if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) } }
                 }
                 if (uiState.videos.isNotEmpty()) {

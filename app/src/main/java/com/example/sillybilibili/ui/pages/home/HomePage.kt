@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -102,10 +103,11 @@ fun HomePage(
     var filterDraft by remember { mutableStateOf(FilterState()) }
     var showMoreMenu by remember { mutableStateOf(false) }
 
-    val scanViewModel: ScanViewModel = hiltViewModel(LocalContext.current as ComponentActivity)
-    val scanUiState by scanViewModel.uiState.collectAsState()
-
     LaunchedEffect(Unit) { viewModel.refreshVideos() }
+    // 用 rememberUpdatedState 持有最新回调与列表：item 内的 lambda 只捕获稳定值，
+    // 卡片参数未变化时 Compose 可以直接跳过重组。
+    val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
+    val latestVideos by rememberUpdatedState(uiState.videos)
     LaunchedEffect(uiState.currentPage) {
         // A page owns only 40 cards. Resetting here prevents Compose from retaining the
         // former page's tail position and immediately advancing again.
@@ -152,23 +154,7 @@ fun HomePage(
         containerColor = DarkBackground
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
-            if (scanUiState.isScanning && scanUiState.scanProgress != null) {
-                val progress = scanUiState.scanProgress!!
-                Surface(color = CyberVermilion.copy(alpha = 0.12f), shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("正在扫描缓存", style = MaterialTheme.typography.labelLarge, color = CyberVermilion)
-                            Text("发现 ${progress.foundVideoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
-                        }
-                        LinearProgressIndicator(
-                            progress = { progress.processedFolders.toFloat() / progress.totalFolders.coerceAtLeast(1).toFloat() },
-                            modifier = Modifier.fillMaxWidth().height(6.dp),
-                            color = CyberVermilion,
-                            trackColor = CyberVermilion.copy(alpha = 0.16f)
-                        )
-                    }
-                }
-            }
+            ScanProgressBanner()
 
             SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索本地视频")
             if (uiState.categories.isNotEmpty()) {
@@ -187,7 +173,7 @@ fun HomePage(
                             border = FilterChipDefaults.filterChipBorder(borderColor = DarkDivider, selectedBorderColor = CyberVermilion, enabled = true, selected = uiState.selectedCategoryId == null)
                         )
                     }
-                    items(uiState.categories) { category ->
+                    items(uiState.categories, key = { it.id }) { category ->
                         CategoryChip(category.name, Color(category.color), category.videoCount, uiState.selectedCategoryId == category.id, onClick = {
                             viewModel.selectCategory(category.id)
                             scope.launch { snackbarHostState.showSnackbar("已切换到「${category.name}」") }
@@ -242,7 +228,13 @@ fun HomePage(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
-                            VideoCard(video, onClick = { onNavigateToPlayer(video, uiState.videos) }, onLongClick = { contextMenuVideo = video }, onCoverRequested = viewModel::requestCover, onOnlineStatusRequested = viewModel::requestOnlineStatus)
+                            VideoCard(
+                                video = video,
+                                onClick = { latestOnNavigate(video, latestVideos) },
+                                onLongClick = { contextMenuVideo = video },
+                                onCoverRequested = viewModel::requestCover,
+                                onOnlineStatusRequested = viewModel::requestOnlineStatus
+                            )
                         }
                         if (uiState.isLoadingMore) item(key = "home-switching-page", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
@@ -264,6 +256,33 @@ fun HomePage(
         )
     }
     if (showFilterSheet) FilterSheet(currentFilter = filterDraft, onDraftFilterChange = { filterDraft = it }, onApplyFilter = { filter -> viewModel.applyFilter(filter); showFilterSheet = false; scope.launch { snackbarHostState.showSnackbar(if (filter.isActive) "筛选条件已应用" else "筛选已重置") } }, onDismiss = { showFilterSheet = false })
+}
+
+/**
+ * 扫描进度横幅。自己持有 ScanViewModel（Activity 作用域，与 ScanPage 共享同一实例），
+ * 扫描进度高频更新时只有横幅重组，主页列表与头部不会跟着重绘。
+ */
+@Composable
+private fun ScanProgressBanner() {
+    val scanViewModel: ScanViewModel = hiltViewModel(LocalContext.current as ComponentActivity)
+    val scanUiState by scanViewModel.uiState.collectAsState()
+    val progress = scanUiState.scanProgress
+    if (!scanUiState.isScanning || progress == null) return
+
+    Surface(color = CyberVermilion.copy(alpha = 0.12f), shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("正在扫描缓存", style = MaterialTheme.typography.labelLarge, color = CyberVermilion)
+                Text("发现 ${progress.foundVideoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
+            }
+            LinearProgressIndicator(
+                progress = { progress.processedFolders.toFloat() / progress.totalFolders.coerceAtLeast(1).toFloat() },
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                color = CyberVermilion,
+                trackColor = CyberVermilion.copy(alpha = 0.16f)
+            )
+        }
+    }
 }
 
 @Composable

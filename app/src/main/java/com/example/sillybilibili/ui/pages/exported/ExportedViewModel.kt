@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 data class ExportedUiState(
@@ -48,6 +50,10 @@ class ExportedViewModel @Inject constructor(
     private val _filter = MutableStateFlow(ExportedLibraryFilter())
     private val _uiState = MutableStateFlow(ExportedUiState(isLoading = true))
     val uiState: StateFlow<ExportedUiState> = _uiState.asStateFlow()
+
+    /** 每视频每会话只请求一次封面，限制并发，避免快速滚动时反复复制 m4s。 */
+    private val coverRequested = HashSet<Long>()
+    private val coverSemaphore = Semaphore(2)
 
     init {
         refreshExternalChanges(silent = true)
@@ -184,10 +190,13 @@ class ExportedViewModel @Inject constructor(
     }
 
     fun requestCover(video: Video) {
+        if (video.coverPath != null || !coverRequested.add(video.id)) return
         viewModelScope.launch {
-            coverCacheService.cacheCover(video)?.let { cachedPath ->
-                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
-                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+            coverSemaphore.withPermit {
+                coverCacheService.cacheCover(video)?.let { cachedPath ->
+                    if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
+                    videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                }
             }
         }
     }

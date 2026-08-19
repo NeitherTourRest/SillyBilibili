@@ -108,6 +108,7 @@ fun ExportedPage(
     var showBatchCategory by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
+    val categoryById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
     LaunchedEffect(uiState.operationMessage) {
         uiState.operationMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -163,7 +164,7 @@ fun ExportedPage(
                             }
                             ExportedVideoCard(
                                 video = video,
-                                category = uiState.categories.firstOrNull { it.id == video.categoryId },
+                                category = categoryById[video.categoryId],
                                 isSelectionMode = uiState.isSelectionMode,
                                 isSelected = video.id in uiState.selectedIds,
                                 onPlay = { video.exportedPath?.let { path -> onNavigateToPlayer(path, video.title) } },
@@ -416,7 +417,7 @@ private fun ExportedVideoCard(
             ) {
                 if (video.displayCoverPath != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(context).data(video.displayCoverPath).crossfade(true).build(),
+                        model = ImageRequest.Builder(context).data(video.displayCoverPath).build(),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop

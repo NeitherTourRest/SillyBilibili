@@ -1,4 +1,4 @@
-﻿package com.example.sillybilibili.ui.pages.home
+package com.example.sillybilibili.ui.pages.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,6 +12,8 @@ import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
 data class VideoListUiState(
@@ -56,15 +58,24 @@ class VideoListViewModel @Inject constructor(
 
     private val _debouncedSearch = _searchQuery.debounce(300L).distinctUntilChanged()
 
+    /** 每视频每会话只请求一次封面/在线状态，限制并发，避免滚动时爆发 IO 与网络请求。 */
+    private val coverRequested = HashSet<Long>()
+    private val statusRequested = HashSet<Long>()
+    private val coverSemaphore = Semaphore(2)
+    private val statusSemaphore = Semaphore(3)
+
     fun requestCover(video: Video) {
+        if (video.coverPath != null || !coverRequested.add(video.id)) return
         viewModelScope.launch {
-            coverCacheService.cacheCover(video)?.let { cachedPath ->
-                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
-                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
-                _uiState.update { state ->
-                    state.copy(videos = state.videos.map {
-                        if (it.id == video.id) it.copy(coverPath = cachedPath) else it
-                    })
+            coverSemaphore.withPermit {
+                coverCacheService.cacheCover(video)?.let { cachedPath ->
+                    if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
+                    videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                    _uiState.update { state ->
+                        state.copy(videos = state.videos.map {
+                            if (it.id == video.id) it.copy(coverPath = cachedPath) else it
+                        })
+                    }
                 }
             }
         }
@@ -72,12 +83,15 @@ class VideoListViewModel @Inject constructor(
 
     fun requestOnlineStatus(video: Video) {
         val service = onlineVideoStatusService ?: return
+        if (!statusRequested.add(video.id)) return
         viewModelScope.launch {
-            val status = service.checkIfNeeded(video)
-            _uiState.update { state ->
-                state.copy(videos = state.videos.map {
-                    if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
-                })
+            statusSemaphore.withPermit {
+                val status = service.checkIfNeeded(video)
+                _uiState.update { state ->
+                    state.copy(videos = state.videos.map {
+                        if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
+                    })
+                }
             }
         }
     }
@@ -188,7 +202,7 @@ class VideoListViewModel @Inject constructor(
     fun goToPage(page: Int) {
         if (page < 0) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
             val fs = _filterSnapshot.value
             val videos = loadPage(
                 categoryId = _categoryId.value,
@@ -203,7 +217,7 @@ class VideoListViewModel @Inject constructor(
 
     fun loadAll() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
             val fs = _filterSnapshot.value
             val all = loadPage(
                 categoryId = _categoryId.value,

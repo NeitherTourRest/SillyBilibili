@@ -1,5 +1,7 @@
 package com.example.sillybilibili.domain.model
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Result of a conservative online availability lookup. A failed lookup is deliberately not
  * treated as a removed video: it can also be caused by connectivity, login or access limits.
@@ -16,6 +18,7 @@ enum class OnlineVideoStatus {
     }
 }
 
+@Immutable
 data class Video(
     val id: Long = 0,
     val avid: Long,

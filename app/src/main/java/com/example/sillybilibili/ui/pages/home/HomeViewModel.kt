@@ -1,4 +1,4 @@
-﻿package com.example.sillybilibili.ui.pages.home
+package com.example.sillybilibili.ui.pages.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,6 +14,8 @@ import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
 private const val SEARCH_DEBOUNCE_MS = 300L
@@ -112,6 +114,16 @@ class HomeViewModel @Inject constructor(
     private var pagingEpoch = 0L
     private var prefetchedPage: PrefetchedHomePage? = null
 
+    /**
+     * 卡片进入屏幕时每个视频只请求一次（当前会话内）。快速滚动会让大量卡片同时进入
+     * 组合，去重后这些重活不会反复排队；再叠加信号量限制并发，避免首屏一次性打爆
+     * 磁盘 IO（无封面时 CoverCacheService 可能整段复制 m4s）和网络（在线核验）。
+     */
+    private val coverRequested = HashSet<Long>()
+    private val statusRequested = HashSet<Long>()
+    private val coverSemaphore = Semaphore(2)
+    private val statusSemaphore = Semaphore(3)
+
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
     init { loadCategories(); loadVideos(); reconcileExternalFiles() }
@@ -123,14 +135,19 @@ class HomeViewModel @Inject constructor(
 
     fun requestCover(video: Video) {
         val service = coverCacheService ?: return
+        // 已持久化的封面不再重复校验；同一视频本会话只请求一次，
+        // 避免滚动时卡片反复进出组合触发无谓的文件复制。
+        if (video.coverPath != null || !coverRequested.add(video.id)) return
         viewModelScope.launch {
-            service.cacheCover(video)?.let { cachedPath ->
-                if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
-                videoRepository.updateVideo(video.copy(coverPath = cachedPath))
-                _uiState.update { state ->
-                    state.copy(videos = state.videos.map {
-                        if (it.id == video.id) it.copy(coverPath = cachedPath) else it
-                    })
+            coverSemaphore.withPermit {
+                service.cacheCover(video)?.let { cachedPath ->
+                    if (!shouldPersistCoverPath(video.coverPath, cachedPath)) return@let
+                    videoRepository.updateVideo(video.copy(coverPath = cachedPath))
+                    _uiState.update { state ->
+                        state.copy(videos = state.videos.map {
+                            if (it.id == video.id) it.copy(coverPath = cachedPath) else it
+                        })
+                    }
                 }
             }
         }
@@ -138,12 +155,16 @@ class HomeViewModel @Inject constructor(
 
     fun requestOnlineStatus(video: Video) {
         val service = onlineVideoStatusService ?: return
+        // 每个视频每会话最多核验一次，避免滚动时反复发起网络请求。
+        if (!statusRequested.add(video.id)) return
         viewModelScope.launch {
-            val status = service.checkIfNeeded(video)
-            _uiState.update { state ->
-                state.copy(videos = state.videos.map {
-                    if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
-                })
+            statusSemaphore.withPermit {
+                val status = service.checkIfNeeded(video)
+                _uiState.update { state ->
+                    state.copy(videos = state.videos.map {
+                        if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
+                    })
+                }
             }
         }
     }
@@ -172,7 +193,8 @@ class HomeViewModel @Inject constructor(
                 .collectLatest { (key, fs) ->
                     val epoch = ++pagingEpoch
                     prefetchedPage = null
-                    _uiState.update { it.copy(isLoading = true, isLoadingMore = false) }
+                    // 已有列表时静默刷新：旧结果保留到新结果到达，避免闪烁。
+                    _uiState.update { it.copy(isLoading = it.videos.isEmpty(), isLoadingMore = false) }
                     val videos = loadPage(
                         categoryId = key.categoryId,
                         query = key.query, fs = fs, page = 0
@@ -267,7 +289,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val epoch = ++pagingEpoch
             prefetchedPage = null
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
             val fs = _filterSnapshot.value
             val videos = loadPage(
                 categoryId = _selectedCategoryId.value,
@@ -286,7 +308,7 @@ class HomeViewModel @Inject constructor(
 
     fun loadAll() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
             val fs = _filterSnapshot.value
             val all = loadPage(
                 categoryId = _selectedCategoryId.value,

@@ -120,7 +120,7 @@ private fun VideoThumbnail(video: Video, accent: Color) {
     ) {
         video.displayCoverPath?.takeUnless { imageFailed }?.let { displayCoverPath ->
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(displayCoverPath).crossfade(true).build(),
+                model = ImageRequest.Builder(LocalContext.current).data(displayCoverPath).build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
