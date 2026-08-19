@@ -2,6 +2,7 @@ package com.example.sillybilibili.service
 
 import com.example.sillybilibili.util.parentDocumentId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -38,6 +39,13 @@ class CoverDiscoveryTest {
             "primary:Android/data/tv.danmaku.bili/download/123/456",
             parentDocumentId("primary:Android/data/tv.danmaku.bili/download/123/456/cover.jpg")
         )
+    }
+
+    @Test
+    fun `cover cache file name is unique per video id and cid`() {
+        assertEquals("42_7.jpg", coverCacheFileName(42L, 7L))
+        assertEquals("1_0.jpg", coverCacheFileName(1L, 0L))
+        assertNotEquals(coverCacheFileName(1L, 2L), coverCacheFileName(2L, 1L))
     }
 
     @Test

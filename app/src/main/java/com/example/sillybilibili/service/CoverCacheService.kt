@@ -30,6 +30,9 @@ internal fun pickCoverFileName(entries: List<String>): String? {
     }
 }
 
+/** 封面缓存文件名：以视频主键为前缀，每个视频独占一个文件。 */
+internal fun coverCacheFileName(videoId: Long, videoCid: Long): String = "${videoId}_${videoCid}.jpg"
+
 /**
  * Shizuku 场景提取视频首帧时只复制文件头部的字节数。
  * B 站缓存的 fMP4（moof/mdat 循环）第一个关键帧位于文件开头几 MB 内，
@@ -53,13 +56,16 @@ class CoverCacheService @Inject constructor(
     suspend fun cacheCover(video: Video): String? = withContext(Dispatchers.IO) {
         video.coverPath?.let { cachedPath ->
             val cachedFile = File(cachedPath)
-            if (isReadableImage(cachedFile)) return@withContext cachedPath
-            cachedFile.delete()
+            // 旧版本曾把所有视频指向同一个字面文件名，导致封面互相串用；
+            // 文件名与当前视频不匹配时视为失效数据，删除后重新生成各自封面。
+            if (cachedFile.name != coverCacheFileName(video.id, video.cid)) cachedFile.delete()
+            else if (isReadableImage(cachedFile)) return@withContext cachedPath
+            else cachedFile.delete()
         }
 
         val cacheDir = File(context.cacheDir, "covers")
         if (!cacheDir.exists() && !cacheDir.mkdirs()) return@withContext null
-        val cacheFile = File(cacheDir, "${'$'}{video.id}_${'$'}{video.cid}.jpg")
+        val cacheFile = File(cacheDir, coverCacheFileName(video.id, video.cid))
         if (isReadableImage(cacheFile)) return@withContext cacheFile.absolutePath
         cacheFile.delete()
 
@@ -161,7 +167,7 @@ class CoverCacheService @Inject constructor(
         // MediaMetadataRetriever runs inside this app and cannot open another app's Android/data
         // directory. Copy only while making the thumbnail, then remove the temporary file.
         val tempDir = File(context.cacheDir, "thumbnail-source")
-        val tempVideo = File(tempDir, "${'$'}{video.id}_${'$'}{video.cid}.m4s")
+        val tempVideo = File(tempDir, "${video.id}_${video.cid}.m4s")
         if (!tempDir.exists() && !tempDir.mkdirs()) return false
         return try {
             // 1) 只复制文件头（fMP4 首个关键帧在开头），几乎瞬间完成

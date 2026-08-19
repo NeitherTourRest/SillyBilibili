@@ -40,8 +40,13 @@ class PlaybackMediaResolver @Inject constructor(
 
     private fun prepareItem(item: PlaybackQueueItem, forceTemporaryCopies: Boolean): PreparedPlaybackItem {
         val video = resolve(item.videoPath, item.id, "video", forceTemporaryCopies)
+        // 音频轨缺失或为空时降级为只播视频，而不是整个播放失败。
         val audio = item.audioPath?.takeIf { it.isNotBlank() }?.let {
-            resolve(it, item.id, "audio", forceTemporaryCopies)
+            try {
+                resolve(it, item.id, "audio", forceTemporaryCopies)
+            } catch (_: IllegalStateException) {
+                null
+            }
         }
         return PreparedPlaybackItem(
             id = item.id,
@@ -55,17 +60,28 @@ class PlaybackMediaResolver @Inject constructor(
     private data class ResolvedPath(val uri: Uri, val isShizukuDataSource: Boolean)
 
     private fun resolve(path: String, videoId: Long, track: String, forceTemporaryCopies: Boolean): ResolvedPath {
+        val trackLabel = if (track == "audio") "音频" else "视频"
         if (path.startsWith("content://")) {
             val parentUri = Uri.parse(path)
             val childName = if (track == "audio") "audio.m4s" else "video.m4s"
             val sourceUri = safFileHelper.findChild(parentUri, childName) ?: parentUri
+            if (safFileHelper.fileLength(sourceUri) <= 0L) {
+                throw IllegalStateException("缓存${trackLabel}文件缺失或为空")
+            }
             return ResolvedPath(sourceUri, false)
         }
 
         val file = File(path)
-        if (file.isFile) return ResolvedPath(Uri.fromFile(file), false)
+        if (file.isFile) {
+            if (file.length() <= 0L) throw IllegalStateException("缓存${trackLabel}文件为空")
+            return ResolvedPath(Uri.fromFile(file), false)
+        }
         if (!shizukuHelper.isShizukuAvailable()) {
-            throw IllegalStateException("无法读取${if (track == "audio") "音频" else "视频"}缓存：请授权 Shizuku 或重新选择目录")
+            throw IllegalStateException("无法读取${trackLabel}缓存：请授权 Shizuku 或重新选择目录")
+        }
+        // 直读前确认源文件存在且非空，避免播放器读不到数据时报底层 I/O 错误。
+        if (shizukuHelper.fileLength(path, useShizuku = true) <= 0L) {
+            throw IllegalStateException("缓存${trackLabel}文件已被清除或为空，请重新扫描")
         }
 
         if (!forceTemporaryCopies) {

@@ -230,7 +230,7 @@ fun PlayerPage(
                     playerError = "直读缓存失败，正在切换至兼容播放模式…"
                     viewModel.useTemporaryCopyFallback()
                 } else {
-                    playerError = "无法播放此视频：${error.errorCodeName}"
+                    playerError = playbackErrorHint(error)
                 }
             }
 
@@ -966,4 +966,31 @@ private fun InlinePlaylistRow(
         }
         if (selected) Icon(Icons.Default.PlayArrow, contentDescription = "当前播放", tint = CyberVermilion)
     }
+}
+
+/** 把 Media3 错误码翻译成用户能理解的中文提示。 */
+internal fun playbackErrorHint(error: PlaybackException): String = playbackErrorHint(error.errorCode)
+
+internal fun playbackErrorHint(errorCode: Int): String = when (errorCode) {
+    PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+    PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+    PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+        "缓存文件读取失败：文件可能已被清除或损坏，请重新扫描后重试"
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
+        "视频格式无法解析：缓存文件可能已损坏，请重新扫描或重新缓存"
+    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ->
+        "设备不支持该视频的编码格式（如 HEVC），请尝试转换后播放"
+    PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+    PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED ->
+        "音频输出初始化失败，请检查系统音量或蓝牙连接"
+    else -> "无法播放此视频（${PlaybackException.getErrorCodeName(errorCode)}）"
 }
