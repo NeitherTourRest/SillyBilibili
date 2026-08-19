@@ -375,6 +375,15 @@ private fun ScanProgressCard(state: ScanUiState) {
                 ProgressDetail("新发现", progress.foundVideoCount)
                 ProgressDetail("跳过", progress.skippedFolders)
             }
+            if (progress.currentAvId.isNotBlank()) {
+                Text(
+                    "正在处理 av${progress.currentAvId} …",
+                    color = DarkTextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (progress.filteredFolders > 0) Text("已按筛选条件排除 ${progress.filteredFolders} 个缓存包", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
             if (progress.step == VideoScanService.ScanStep.RECONCILING_HISTORY) {
                 val message = when {

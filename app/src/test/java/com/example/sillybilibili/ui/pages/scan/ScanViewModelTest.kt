@@ -8,6 +8,7 @@ import com.example.sillybilibili.service.ScanJobRegistry
 import com.example.sillybilibili.service.VideoScanService
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
 import org.junit.After
@@ -41,6 +42,7 @@ class ScanViewModelTest {
         every { settingsService.scanPath } returns null
         every { videoScanService.getBilibiliPathConstant() } returns "/storage/emulated/0/Android/data/tv.danmaku.bili/download"
         every { videoScanService.isShizukuAvailable() } returns true
+        every { videoScanService.shizukuState } returns MutableStateFlow(true)
         every { videoScanService.canAccessDirectoryDirectly(any()) } returns false
         coEvery { videoScanService.inspectDirectory(any()) } returns VideoScanService.DirectorySnapshot(
             access = VideoScanService.ScanAccess.SHIZUKU,

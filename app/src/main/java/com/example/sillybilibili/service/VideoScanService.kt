@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // VideoScanService.kt — B 站缓存视频扫描器（性能优化版）
 // ============================================================
 //
@@ -20,6 +20,7 @@ import com.example.sillybilibili.util.SafFileHelper
 import com.example.sillybilibili.util.ShizukuFileHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import org.json.JSONObject
 import java.io.File
@@ -153,6 +154,9 @@ class VideoScanService @Inject constructor(
     // ============================================================
     // Public API
     // ============================================================
+
+    /** 可观察的 Shizuku 可用性（启动/授权后自动变为可用，无需重启应用）。 */
+    val shizukuState: StateFlow<Boolean> get() = shizukuHelper.shizukuState
 
     // 返回外部存储根路径
     fun getBasePath(): String = Environment.getExternalStorageDirectory().path
@@ -353,11 +357,32 @@ class VideoScanService @Inject constructor(
         ))
 
         // --- Phase 3：批量读取 entry.json 并预过滤 ---
-        // 每批仅启动一个 shell，单项扫描复用这里解析的元数据，不再重复 cat。
-        val entryLoadResult = withContext(Dispatchers.IO) {
-            loadEntryCandidates(path, avidDirNames, useShizuku)
+        // 每批仅启动一个 shell；每处理完一批就上报一次进度，避免大库长时间无反馈。
+        val entryBatches = avidDirNames.chunked(BATCH_SIZE)
+        val discoveredCandidates = mutableListOf<EntryCandidate>()
+        var entryLoadCompleted = true
+        entryBatches.forEachIndexed { batchIndex, batch ->
+            val batchResult = withContext(Dispatchers.IO) {
+                shizukuHelper.readEntryJsonBatchResult(path, batch, useShizuku)
+            }
+            if (!batchResult.completed) entryLoadCompleted = false
+            batchResult.entries.mapNotNull { entry ->
+                val json = try { JSONObject(entry.content) } catch (_: Exception) { return@mapNotNull null }
+                val meta = parseEntryJsonMeta(json) ?: return@mapNotNull null
+                EntryCandidate(entry.avidName, entry.cidDirName, meta)
+            }.let { discoveredCandidates.addAll(it) }
+            emit(ScanProgress(
+                phase = ScanPhase.PROCESSING,
+                step = ScanStep.READING_METADATA,
+                stepProgress = (batchIndex + 1).toFloat() / entryBatches.size,
+                totalFolders = totalFolders,
+                existingSourceCount = availableStoredPaths.size,
+                newFolders = avidDirNames.size,
+                processedFolders = min((batchIndex + 1) * BATCH_SIZE, avidDirNames.size),
+                currentAvId = batch.lastOrNull() ?: "",
+                statusMessage = "正在解析视频元数据：${batchIndex + 1}/${entryBatches.size} 批，已读 ${discoveredCandidates.size} 个缓存包"
+            ))
         }
-        val discoveredCandidates = entryLoadResult.candidates
         val metadataMatchedCandidates = discoveredCandidates.filter { candidate ->
             !f.isActive || matchesFilter(candidate.meta, f)
         }
@@ -389,7 +414,7 @@ class VideoScanService @Inject constructor(
         // eligible for reconciliation.
         val currentAvidNames = avidDirNames.toSet()
         val discoveredPaths = discoveredCandidates.map { it.videoPath(path) }.toSet()
-        val hasCompleteMetadataCoverage = entryLoadResult.completed && availableStoredPaths
+        val hasCompleteMetadataCoverage = entryLoadCompleted && availableStoredPaths
             .filter { storedPath -> storedPath.avIdFrom(directoryPrefix) in currentAvidNames }
             .all { it in discoveredPaths }
         val candidatesToValidate = if (shouldReconcileSources) {
@@ -433,6 +458,7 @@ class VideoScanService @Inject constructor(
                     newFolders = candidateVideos.size,
                     processedFolders = min((batchIndex + 1) * BATCH_SIZE, candidatesToValidate.size),
                     foundVideoCount = fileInfoByVideoPath.size,
+                    currentAvId = batch.lastOrNull()?.avidName ?: "",
                     statusMessage = "正在核验视频与音频文件：${min((batchIndex + 1) * BATCH_SIZE, candidatesToValidate.size)}/${candidatesToValidate.size}"
                 ))
             }
@@ -519,6 +545,7 @@ class VideoScanService @Inject constructor(
                 newFolders = totalCandidates, processedFolders = processed,
                 foundVideoCount = videos.size,
                 unavailableSourceCount = unavailableSourceCount,
+                currentAvId = chunk.lastOrNull()?.avidName ?: "",
                 statusMessage = "正在整理新增视频：$processed/$totalCandidates，已识别 ${videos.size} 个"
             ))
         }
@@ -580,6 +607,21 @@ class VideoScanService @Inject constructor(
                 )
             }
         }
+
+        emit(ScanProgress(
+            phase = ScanPhase.SAVING,
+            step = ScanStep.SAVING_RESULTS,
+            stepProgress = 1f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            filteredFolders = filteredCount,
+            newFolders = totalCandidates,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = "视频库已更新，正在收尾…"
+        ))
 
         val completeMessage = when {
             shouldReconcileSources && !allowMissingSourceReconciliation ->
@@ -701,10 +743,12 @@ class VideoScanService @Inject constructor(
 
         // SAF must use the same per-CID identity as direct/Shizuku scans. AV-only de-duplication
         // loses multi-part videos and prevents later downloaded parts from appearing.
-        val discoveredCandidates = withContext(Dispatchers.IO) {
-            buildList {
-                avidDirNames.forEach { avidName ->
-                    val avidUri = safHelper.findChild(treeUri, avidName) ?: return@forEach
+        // 逐缓存包遍历并实时上报，SAF 每次文档查询较慢，不能等到全部读完才反馈。
+        val discoveredCandidates = mutableListOf<SafCandidate>()
+        avidDirNames.forEachIndexed { avidIndex, avidName ->
+            val candidatesInAvid = withContext(Dispatchers.IO) {
+                buildList {
+                    val avidUri = safHelper.findChild(treeUri, avidName) ?: return@buildList
                     safHelper.listSubDirectoriesWithEntryJson(avidUri).forEach { cidDirName ->
                         val cidUri = safHelper.findChild(avidUri, cidDirName) ?: return@forEach
                         val entryJsonUri = safHelper.findChild(cidUri, "entry.json") ?: return@forEach
@@ -724,6 +768,18 @@ class VideoScanService @Inject constructor(
                     }
                 }
             }
+            discoveredCandidates.addAll(candidatesInAvid)
+            emit(ScanProgress(
+                phase = ScanPhase.PROCESSING,
+                step = ScanStep.READING_METADATA,
+                stepProgress = (avidIndex + 1).toFloat() / avidDirNames.size,
+                totalFolders = totalFolders,
+                existingSourceCount = availableStoredPaths.size,
+                newFolders = avidDirNames.size,
+                processedFolders = avidIndex + 1,
+                currentAvId = avidName,
+                statusMessage = "正在读取元数据：${avidIndex + 1}/${avidDirNames.size} 个缓存包，已发现 ${discoveredCandidates.size} 个视频"
+            ))
         }
 
         val matchedCandidates = discoveredCandidates.filter { !f.isActive || matchesFilter(it.meta, f) }
@@ -777,6 +833,7 @@ class VideoScanService @Inject constructor(
                 newFolders = newCandidates.size,
                 processedFolders = index + 1,
                 foundVideoCount = validVideos.keys.count { it !in existingPaths },
+                currentAvId = candidate.avidName,
                 statusMessage = "正在核验视频与音频文件：${index + 1}/${candidatesToCheck.size}"
             ))
         }
@@ -833,6 +890,19 @@ class VideoScanService @Inject constructor(
                 )
             }
         }
+        emit(ScanProgress(
+            phase = ScanPhase.SAVING,
+            step = ScanStep.SAVING_RESULTS,
+            stepProgress = 1f,
+            totalFolders = totalFolders,
+            existingSourceCount = availableStoredPaths.size,
+            skippedFolders = skippedCount,
+            newFolders = newCandidates.size,
+            foundVideoCount = scannedVideos.size,
+            unavailableSourceCount = unavailableSourceCount,
+            reconciliationPerformed = allowMissingSourceReconciliation,
+            statusMessage = "视频库已更新，正在收尾…"
+        ))
         val message = when {
             shouldReconcileSources && !allowMissingSourceReconciliation ->
                 "扫描完成：新增 ${scannedVideos.size} 个视频；核验不完整，未清理历史源文件"
@@ -908,29 +978,6 @@ class VideoScanService @Inject constructor(
             "$basePath/$avidName/$cidDirName/${meta.typeTag}/audio.m4s"
     }
 
-    // 批量预过滤：按 BATCH_SIZE 分批读 entry.json，用过滤条件筛掉不匹配的文件夹
-    private data class EntryCandidateLoadResult(
-        val candidates: List<EntryCandidate>,
-        val completed: Boolean
-    )
-
-    private fun loadEntryCandidates(
-        basePath: String,
-        avidNames: List<String>,
-        useShizuku: Boolean
-    ): EntryCandidateLoadResult {
-        var completed = true
-        val candidates = avidNames.chunked(BATCH_SIZE).flatMap { batch ->
-            val batchResult = shizukuHelper.readEntryJsonBatchResult(basePath, batch, useShizuku)
-            if (!batchResult.completed) completed = false
-            batchResult.entries.mapNotNull { entry ->
-                val json = try { JSONObject(entry.content) } catch (_: Exception) { return@mapNotNull null }
-                val meta = parseEntryJsonMeta(json) ?: return@mapNotNull null
-                EntryCandidate(entry.avidName, entry.cidDirName, meta)
-            }
-        }
-        return EntryCandidateLoadResult(candidates, completed)
-    }
 
     // 从 entry.json 提取视频元数据（标题、画质、分辨率、时长、cid）
     private fun parseEntryJsonMeta(json: JSONObject): ParsedMeta? {

@@ -42,6 +42,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 // @Inject / @Singleton = Hilt 注解
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,19 +63,30 @@ class ShizukuFileHelper @Inject constructor(
     companion object {
         private const val TAG = "ShizukuFileHelper"
         private const val SHIZUKU_PACKAGE_NAME = "moe.shizuku.privileged.api"
+        /** UserService 绑定等待上限：Shizuku 刚启动时绑定需要一两秒。 */
+        private const val BIND_WAIT_MS = 2000L
     }
 
     private val permissionListeners = mutableListOf<(Boolean) -> Unit>()
     private var shellService: com.example.sillybilibili.service.IShellService? = null
+    private val bindingInFlight = AtomicBoolean(false)
+
+    /** 可观察的 Shizuku 可用性（已安装 + 已授权 + binder 连通），供 UI 实时刷新。 */
+    private val _shizukuState = MutableStateFlow(false)
+    val shizukuState: StateFlow<Boolean> = _shizukuState.asStateFlow()
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             shellService = com.example.sillybilibili.service.IShellService.Stub.asInterface(service)
+            bindingInFlight.set(false)
+            refreshState()
             Log.d(TAG, "ShellService connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             shellService = null
+            bindingInFlight.set(false)
+            refreshState()
             Log.d(TAG, "ShellService disconnected")
         }
     }
@@ -83,13 +98,49 @@ class ShizukuFileHelper @Inject constructor(
                 Log.d(TAG, "Shizuku permission result: granted=$granted")
                 permissionListeners.forEach { it(granted) }
                 if (granted) bindShellService()
+                refreshState()
             }
         }
+        // Shizuku 服务在应用启动后才被启动/授权时，binder 到达会自动重新绑定，
+        // 不再需要重启本应用；binder 死亡时同步降级。
+        Shizuku.addBinderReceivedListenerSticky {
+            Log.d(TAG, "Shizuku binder received")
+            refreshState()
+            bindShellService()
+        }
+        Shizuku.addBinderDeadListener {
+            Log.d(TAG, "Shizuku binder dead")
+            shellService = null
+            bindingInFlight.set(false)
+            refreshState()
+        }
         if (isShizukuAvailable()) bindShellService()
+        refreshState()
+    }
+
+    private fun refreshState() {
+        _shizukuState.value = isShizukuAvailable()
+    }
+
+    /**
+     * 绑定尚未建立时尝试绑定并等待一小段（Shizuku 刚启动、UserService 正在拉起）。
+     * 主线程不等待，直接返回当前状态，避免阻塞 UI。
+     */
+    private fun ensureShellServiceBound(): Boolean {
+        if (shellService != null) return true
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return false
+        bindShellService()
+        var waited = 0L
+        while (shellService == null && waited < BIND_WAIT_MS) {
+            try { Thread.sleep(50) } catch (_: InterruptedException) { return false }
+            waited += 50
+        }
+        return shellService != null
     }
 
     // 向 Shizuku 注册 ShellService 用户服务，建立跨进程 Shell 通道
     private fun bindShellService() {
+        if (!bindingInFlight.compareAndSet(false, true)) return
         try {
             val args = Shizuku.UserServiceArgs(
                 ComponentName(
@@ -106,6 +157,7 @@ class ShizukuFileHelper @Inject constructor(
             Shizuku.bindUserService(args, serviceConnection)
             Log.d(TAG, "ShellService binding requested")
         } catch (e: Exception) {
+            bindingInFlight.set(false)
             Log.e(TAG, "Failed to bind ShellService", e)
         }
     }
@@ -233,7 +285,7 @@ class ShizukuFileHelper @Inject constructor(
         // Permission may be granted while the UserService is still binding (or has died).
         // Do not run this privileged scan through the app's ordinary shell in that state:
         // a permission-denied empty result would otherwise look like an empty cache.
-        if (shellService == null) return DirectoryListResult(emptyList(), false)
+        if (!ensureShellServiceBound()) return DirectoryListResult(emptyList(), false)
         return try {
             val completionMarker = "__SILLY_LIST_COMPLETE__"
             val output = execSh(
@@ -349,7 +401,7 @@ class ShizukuFileHelper @Inject constructor(
             return EntryJsonBatchResult(entries, complete)
         }
 
-        if (shellService == null) return EntryJsonBatchResult(emptyList(), false)
+        if (!ensureShellServiceBound()) return EntryJsonBatchResult(emptyList(), false)
 
         // Keep filesystem work inside the long-lived UserService. Creating `sh` and parsing its
         // stdout once per batch dominated scans of libraries with thousands of cache folders.
@@ -472,7 +524,7 @@ class ShizukuFileHelper @Inject constructor(
             return VideoFileInfoBatchResult(result, true)
         }
 
-        if (shellService == null) return VideoFileInfoBatchResult(emptyMap(), false)
+        if (!ensureShellServiceBound()) return VideoFileInfoBatchResult(emptyMap(), false)
 
         try {
             val directResult = shellService!!.getVideoFileInfoBatch(
@@ -635,8 +687,9 @@ class ShizukuFileHelper @Inject constructor(
                 }
             } catch (_: Exception) { null }
         }
+        if (!ensureShellServiceBound()) return null
         return try {
-            shellService?.readFileRange(path, offset, minOf(length, 256 * 1024))?.takeIf { it.isNotEmpty() }
+            shellService!!.readFileRange(path, offset, minOf(length, 256 * 1024))?.takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
             Log.w(TAG, "Shizuku readFileRange failed", e)
             null
@@ -759,7 +812,7 @@ class ShizukuFileHelper @Inject constructor(
 
     // 通过 Shizuku 或本地 shell 执行命令，返回 stdout+stderr
     private fun execSh(command: String, useShizuku: Boolean): String {
-        return if (useShizuku && isShizukuAvailable() && shellService != null) {
+        return if (useShizuku && isShizukuAvailable() && ensureShellServiceBound()) {
             try {
                 val result = shellService!!.exec(command)
                 if (result.isBlank() && !useShizuku) "" else result

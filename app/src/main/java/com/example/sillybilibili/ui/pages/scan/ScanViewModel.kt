@@ -107,6 +107,18 @@ class ScanViewModel @Inject constructor(
             )
         }
         refreshDirectorySnapshot()
+        // 启动 Shizuku / 授予权限后自动变为可用并重新检查目录，无需重启应用。
+        viewModelScope.launch {
+            videoScanService.shizukuState.collect { available ->
+                _uiState.update { state ->
+                    state.copy(
+                        isShizukuAvailable = available,
+                        useSaf = state.safCanAccessAndroidData && !state.isDirectAccessAvailable && !available && state.safTreeUri != null
+                    )
+                }
+                refreshDirectorySnapshot()
+            }
+        }
     }
 
     fun setSafTreeUri(uri: Uri?) {
