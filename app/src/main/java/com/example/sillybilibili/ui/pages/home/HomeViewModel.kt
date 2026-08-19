@@ -64,7 +64,9 @@ data class HomeUiState(
     val isLoading: Boolean = false, val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
     val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null,
-    val isSelectionMode: Boolean = false, val selectedIds: Set<Long> = emptySet()
+    val isSelectionMode: Boolean = false, val selectedIds: Set<Long> = emptySet(),
+    /** 扫描库中的视频总数（sourceAvailable = 1），用于页头位置指示。 */
+    val totalVideoCount: Int = 0
 ) { companion object { const val PAGE_SIZE = 40 } }
 
 /** Starts the next database page early enough that long lists do not visibly pause at the end. */
@@ -230,6 +232,7 @@ class HomeViewModel @Inject constructor(
                         query = key.query, fs = fs, page = 0
                     )
                     if (epoch != pagingEpoch) return@collectLatest
+                    val totalVideoCount = videoRepository.getTotalVideoCount()
                     _uiState.update {
                         it.copy(
                             videos = videos,
@@ -237,7 +240,8 @@ class HomeViewModel @Inject constructor(
                             filterState = fs.filter,
                             currentPage = 0,
                             isLoading = false,
-                            hasMoreData = videos.size == HomeUiState.PAGE_SIZE
+                            hasMoreData = videos.size == HomeUiState.PAGE_SIZE,
+                            totalVideoCount = totalVideoCount
                         )
                     }
                     if (videos.size == HomeUiState.PAGE_SIZE) {

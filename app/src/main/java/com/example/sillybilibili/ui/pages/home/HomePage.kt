@@ -216,7 +216,9 @@ fun HomePage(
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (uiState.videos.isEmpty()) "视频库" else "第 ${uiState.currentPage + 1} 页 · ${uiState.videos.size} 个视频",
+                        // 位置指示：第 A 页 * 每页 B 个 + 页首偏移 C / 总视频数 D
+                        if (uiState.videos.isEmpty()) "视频库"
+                        else "${uiState.currentPage + 1} * ${HomeUiState.PAGE_SIZE} + 0 / ${uiState.totalVideoCount}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )

@@ -42,6 +42,7 @@ class HomeViewModelTest {
         every { categoryRepository.getAllCategories() } returns flowOf(emptyList())
         coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns emptyList()
         coEvery { videoRepository.getVideoById(any()) } returns null
+        coEvery { videoRepository.getTotalVideoCount() } returns 100
         coEvery { videoRepository.updateVideo(any()) } just Runs
         coEvery { videoRepository.deleteVideo(any()) } just Runs
         coEvery { videoRepository.getAllAvIds() } returns emptyList()
