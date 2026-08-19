@@ -427,6 +427,17 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /** 拖拽连续选择：选中 [fromIndex, toIndex]（含端点）区间内的视频，已选中的保持不变。 */
+    fun selectRange(fromIndex: Int, toIndex: Int) {
+        _uiState.update { state ->
+            if (state.videos.isEmpty()) return@update state
+            val start = minOf(fromIndex, toIndex).coerceIn(0, state.videos.size - 1)
+            val end = maxOf(fromIndex, toIndex).coerceIn(0, state.videos.size - 1)
+            val ids = (start..end).map { state.videos[it].id }
+            state.copy(selectedIds = state.selectedIds + ids)
+        }
+    }
+
     fun selectedVideos(): List<Video> {
         val state = _uiState.value
         return state.videos.filter { it.id in state.selectedIds }

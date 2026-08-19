@@ -239,6 +239,56 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `selectRange selects the range between indices inclusive`() = runTest {
+        val videos = List(5) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        advanceUntilIdle()
+
+        viewModel.enterSelectionMode()
+        viewModel.selectRange(1, 3)
+        assertEquals(setOf(2L, 3L, 4L), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `selectRange handles reversed indices`() = runTest {
+        val videos = List(5) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        advanceUntilIdle()
+
+        viewModel.selectRange(3, 1)
+        assertEquals(setOf(2L, 3L, 4L), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `selectRange keeps previously selected ids`() = runTest {
+        val videos = List(5) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        advanceUntilIdle()
+
+        viewModel.selectRange(0, 0)
+        viewModel.selectRange(3, 4)
+        assertEquals(setOf(1L, 4L, 5L), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `selectRange clamps out of bounds indices`() = runTest {
+        val videos = List(3) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "T$index", path = "/v$index", audioPath = "/a$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        advanceUntilIdle()
+
+        viewModel.selectRange(-5, 99)
+        assertEquals(setOf(1L, 2L, 3L), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
     fun `selection mode toggles, selects all and reports selection`() = runTest {
         val videos = listOf(
             Video(id = 11, avid = 1, cid = 1, title = "A", path = "/v1", audioPath = "/a1", size = 1, duration = 1),

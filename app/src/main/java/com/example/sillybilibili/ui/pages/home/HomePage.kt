@@ -73,6 +73,7 @@ import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
 import com.example.sillybilibili.ui.components.SearchBar
 import com.example.sillybilibili.ui.components.VideoCard
+import com.example.sillybilibili.ui.components.rangeSelectDrag
 import com.example.sillybilibili.ui.components.VideoContextMenu
 import com.example.sillybilibili.ui.pages.scan.ScanViewModel
 import com.example.sillybilibili.ui.theme.CyberVermilion
@@ -244,7 +245,7 @@ fun HomePage(
             when {
                 uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion) }
                 uiState.videos.isEmpty() -> EmptyVideoLibrary(onScan = onNavigateToScan)
-                else -> Box(Modifier.weight(1f)) {
+                else -> Box(Modifier.weight(1f).rangeSelectDrag(uiState.isSelectionMode, listState, viewModel::selectRange)) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
