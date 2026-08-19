@@ -236,6 +236,32 @@ class HomeViewModelTest {
         advanceUntilIdle()
         coVerify(exactly = 2) { coverService.cacheCover(video) }
     }
+
+    @Test
+    fun `selection mode toggles, selects all and reports selection`() = runTest {
+        val videos = listOf(
+            Video(id = 11, avid = 1, cid = 1, title = "A", path = "/v1", audioPath = "/a1", size = 1, duration = 1),
+            Video(id = 12, avid = 2, cid = 2, title = "B", path = "/v2", audioPath = "/a2", size = 1, duration = 1)
+        )
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns videos
+        advanceUntilIdle()
+
+        viewModel.enterSelectionMode()
+        assertTrue(viewModel.uiState.value.isSelectionMode)
+
+        viewModel.toggleSelection(11L)
+        assertEquals(setOf(11L), viewModel.uiState.value.selectedIds)
+
+        viewModel.toggleSelectAll()
+        assertEquals(setOf(11L, 12L), viewModel.uiState.value.selectedIds)
+        assertEquals(listOf(11L, 12L), viewModel.selectedVideos().map { it.id })
+
+        viewModel.toggleSelectAll()
+        assertTrue(viewModel.uiState.value.selectedIds.isEmpty())
+
+        viewModel.exitSelectionMode()
+        assertFalse(viewModel.uiState.value.isSelectionMode)
+    }
 }
 
 class StandardTestDispatcherRule : TestWatcher() {

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MenuBook
@@ -66,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.R
 import com.example.sillybilibili.ui.components.AppTopBar
+import com.example.sillybilibili.ui.components.BatchActionBar
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
@@ -133,20 +135,29 @@ fun HomePage(
 
     Scaffold(
         topBar = {
-            AppTopBar(title = stringResource(R.string.app_name), subtitle = stringResource(R.string.home_subtitle)) {
-                IconButton(onClick = { filterDraft = uiState.filterState; showFilterSheet = true }) {
-                    BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "筛选")
+            AppTopBar(
+                title = if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else stringResource(R.string.app_name),
+                subtitle = if (uiState.isSelectionMode) null else stringResource(R.string.home_subtitle)
+            ) {
+                if (uiState.isSelectionMode) {
+                    TextButton(onClick = viewModel::toggleSelectAll) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, "完成选择", tint = DarkTextSecondary) }
+                } else {
+                    TextButton(onClick = viewModel::enterSelectionMode, enabled = uiState.videos.isNotEmpty()) { Text("多选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    IconButton(onClick = { filterDraft = uiState.filterState; showFilterSheet = true }) {
+                        BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) {
+                            Icon(Icons.Default.FilterList, contentDescription = "筛选")
+                        }
                     }
-                }
-                IconButton(onClick = onNavigateToScan) { Icon(Icons.Default.YoutubeSearchedFor, contentDescription = stringResource(R.string.scan_videos)) }
-                Box {
-                    IconButton(onClick = { showMoreMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more)) }
-                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.exported_videos)) }, leadingIcon = { Icon(Icons.Default.FolderOpen, null) }, onClick = { showMoreMenu = false; onNavigateToExported() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.category_management)) }, leadingIcon = { Icon(Icons.Default.Category, null) }, onClick = { showMoreMenu = false; onNavigateToCategories() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.user_guide)) }, leadingIcon = { Icon(Icons.Default.MenuBook, null) }, onClick = { showMoreMenu = false; onNavigateToGuide() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.settings_title)) }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { showMoreMenu = false; onNavigateToSettings() })
+                    IconButton(onClick = onNavigateToScan) { Icon(Icons.Default.YoutubeSearchedFor, contentDescription = stringResource(R.string.scan_videos)) }
+                    Box {
+                        IconButton(onClick = { showMoreMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more)) }
+                        DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.exported_videos)) }, leadingIcon = { Icon(Icons.Default.FolderOpen, null) }, onClick = { showMoreMenu = false; onNavigateToExported() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.category_management)) }, leadingIcon = { Icon(Icons.Default.Category, null) }, onClick = { showMoreMenu = false; onNavigateToCategories() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.user_guide)) }, leadingIcon = { Icon(Icons.Default.MenuBook, null) }, onClick = { showMoreMenu = false; onNavigateToGuide() })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_title)) }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { showMoreMenu = false; onNavigateToSettings() })
+                        }
                     }
                 }
             }
@@ -155,9 +166,17 @@ fun HomePage(
         containerColor = DarkBackground
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
-            ScanProgressBanner()
+            if (uiState.isSelectionMode) {
+                BatchActionBar(
+                    hasSelection = uiState.selectedIds.isNotEmpty(),
+                    onConvertToMp4 = viewModel::batchConvertToMp4,
+                    onRefreshStatus = viewModel::batchRefreshOnlineStatus,
+                    onCheckIntegrity = viewModel::batchCheckIntegrity
+                )
+            } else {
+                ScanProgressBanner()
 
-            SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索本地视频")
+                SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索本地视频")
             if (uiState.categories.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("分类", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -217,6 +236,7 @@ fun HomePage(
                     )
                 }
             }
+            }
 
             when {
                 uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion) }
@@ -234,7 +254,10 @@ fun HomePage(
                                 onClick = { latestOnNavigate(video, latestVideos) },
                                 onLongClick = { contextMenuVideo = video },
                                 onCoverRequested = viewModel::requestCover,
-                                onOnlineStatusRequested = viewModel::requestOnlineStatus
+                                onOnlineStatusRequested = viewModel::requestOnlineStatus,
+                                selectionMode = uiState.isSelectionMode,
+                                selected = video.id in uiState.selectedIds,
+                                onSelect = { viewModel.toggleSelection(video.id) }
                             )
                         }
                         if (uiState.isLoadingMore) item(key = "home-switching-page", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }

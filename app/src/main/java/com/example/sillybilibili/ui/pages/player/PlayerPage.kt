@@ -130,6 +130,7 @@ fun PlayerPage(
     val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsState()
     val onlineStatus by viewModel.onlineStatus.collectAsState()
     val currentVideo by viewModel.currentVideo.collectAsState()
+    val integrityStatus by viewModel.integrityStatus.collectAsState()
     val conversionProgress by viewModel.conversionProgress.collectAsState()
     val swipePreviewFrames by viewModel.swipePreviewFrames.collectAsState()
     val controllerFuture = remember(context) {
@@ -532,6 +533,7 @@ fun PlayerPage(
                     onlineStatus = onlineStatus,
                     activeItem = queue?.items?.getOrNull(activeIndex),
                     currentVideo = currentVideo,
+                    integrityStatus = integrityStatus,
                     conversionProgress = conversionProgress,
                     onConvertToMp4 = viewModel::convertToMp4,
                     backgroundPlaybackEnabled = backgroundPlaybackEnabled,
@@ -540,7 +542,9 @@ fun PlayerPage(
                     videoAspectRatio = videoAspectRatio,
                     usesShizukuDataSource = preparation.usesShizukuDataSource,
                     onShowEpisodes = { showQueueSheet = true },
-                    onSleepTimer = { showSleepTimerSheet = true }
+                    onSleepTimer = { showSleepTimerSheet = true },
+                    onRefreshStatus = viewModel::refreshOnlineStatus,
+                    onCheckIntegrity = viewModel::checkMediaIntegrity
                 )
             }
             item {
@@ -826,6 +830,7 @@ private fun PlayerInfoPanel(
     onlineStatus: com.example.sillybilibili.domain.model.OnlineVideoStatus,
     activeItem: PlaybackQueueItem?,
     currentVideo: com.example.sillybilibili.domain.model.Video?,
+    integrityStatus: com.example.sillybilibili.service.MediaIntegrityStatus?,
     conversionProgress: com.example.sillybilibili.domain.model.ConversionProgress?,
     onConvertToMp4: (PlaybackQueueItem) -> Unit,
     backgroundPlaybackEnabled: Boolean,
@@ -834,7 +839,9 @@ private fun PlayerInfoPanel(
     videoAspectRatio: Float,
     usesShizukuDataSource: Boolean,
     onShowEpisodes: () -> Unit,
-    onSleepTimer: () -> Unit
+    onSleepTimer: () -> Unit,
+    onRefreshStatus: () -> Unit,
+    onCheckIntegrity: () -> Unit
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title.ifBlank { "正在播放" }, color = DarkTextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -867,6 +874,9 @@ private fun PlayerInfoPanel(
                     if (video.pubdate > 0L) PlayerDetailLine("发布时间", formatPublishDate(video.pubdate))
                     PlayerDetailLine("缓存时间", formatCachedAt(video.addedAt))
                 }
+                integrityStatus?.let { status ->
+                    PlayerDetailLine("文件完整性", integrityStatusLabel(status))
+                }
                 PlayerDetailLine("播放来源", sourceType)
                 PlayerDetailLine("媒体文件", videoName)
                 PlayerDetailLine("时长 / 倍速", "$durationLabel · ${playbackSpeed}×")
@@ -878,6 +888,10 @@ private fun PlayerInfoPanel(
             TextButton(onClick = onShowEpisodes, modifier = Modifier.weight(1f)) { Text("选集 $queueSize", color = CyberVermilion) }
             TextButton(onClick = onSleepTimer, modifier = Modifier.weight(1f)) { Text("定时停止", color = DarkTextSecondary) }
             TextButton(onClick = {}, modifier = Modifier.weight(1f)) { Text(if (backgroundPlaybackEnabled) "后台播放已开" else "后台播放已关", color = DarkTextSecondary, maxLines = 1) }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onRefreshStatus, modifier = Modifier.weight(1f)) { Text("刷新在线状态", color = DarkTextSecondary) }
+            TextButton(onClick = onCheckIntegrity, modifier = Modifier.weight(1f)) { Text("检查文件完整性", color = DarkTextSecondary) }
         }
         activeItem?.takeIf { it.canConvertToMp4 }?.let { item ->
             val isConverting = conversionProgress?.status in setOf(ConversionStatus.PENDING, ConversionStatus.CONVERTING)
@@ -993,6 +1007,15 @@ internal fun formatCachedAt(addedAtMs: Long): String =
     java.time.Instant.ofEpochMilli(addedAtMs)
         .atZone(java.time.ZoneId.systemDefault())
         .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+
+/** 完整性状态 → 中文说明。 */
+internal fun integrityStatusLabel(status: com.example.sillybilibili.service.MediaIntegrityStatus): String = when (status) {
+    com.example.sillybilibili.service.MediaIntegrityStatus.OK -> "视频与音频文件完好"
+    com.example.sillybilibili.service.MediaIntegrityStatus.VIDEO_MISSING -> "视频文件缺失或为空"
+    com.example.sillybilibili.service.MediaIntegrityStatus.AUDIO_MISSING -> "音频文件缺失或为空"
+    com.example.sillybilibili.service.MediaIntegrityStatus.BOTH_MISSING -> "视频与音频文件均缺失"
+    com.example.sillybilibili.service.MediaIntegrityStatus.UNKNOWN -> "无法确认（目录隔离且未授权 Shizuku）"
+}
 
 /** 把 Media3 错误码翻译成用户能理解的中文提示。 */
 internal fun playbackErrorHint(error: PlaybackException): String = playbackErrorHint(error.errorCode)

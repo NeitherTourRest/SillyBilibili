@@ -103,6 +103,22 @@ class OnlineVideoStatusService @Inject constructor(
     }
 
     /**
+     * Explicit per-video refresh triggered from the player screen. Unlike [checkIfNeeded],
+     * ignores the normal cache window so the user sees an up-to-date result immediately.
+     */
+    suspend fun forceCheck(video: Video): OnlineVideoStatus {
+        if (video.id <= 0L) return video.onlineStatus
+        val lock = videoLocks.getOrPut(video.id) { Mutex() }
+        return lock.withLock {
+            val result = remoteDataSource.fetchStatus(video.avid)
+            videoRepository.updateVideo(
+                video.copy(onlineStatus = result, onlineCheckedAt = System.currentTimeMillis())
+            )
+            result
+        }
+    }
+
+    /**
      * Explicit user-triggered refresh. Unlike [checkIfNeeded], this deliberately ignores the
      * normal cache window and groups split episodes under the same AV into one request.
      */

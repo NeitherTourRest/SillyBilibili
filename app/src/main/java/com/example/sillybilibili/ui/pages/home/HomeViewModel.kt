@@ -1,18 +1,28 @@
 package com.example.sillybilibili.ui.pages.home
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sillybilibili.domain.model.Category
+import com.example.sillybilibili.domain.model.OnlineVideoStatus
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.domain.repository.VideoRepository
+import com.example.sillybilibili.service.ConversionForegroundService
+import com.example.sillybilibili.service.ConversionJobRegistry
+import com.example.sillybilibili.service.MediaIntegrityChecker
+import com.example.sillybilibili.service.MediaIntegrityStatus
 import com.example.sillybilibili.service.VideoScanService
 import com.example.sillybilibili.service.CoverCacheService
 import com.example.sillybilibili.service.ExternalMediaSyncService
 import com.example.sillybilibili.service.COVER_RETRY_INTERVAL_MS
 import com.example.sillybilibili.service.OnlineVideoStatusService
+import com.example.sillybilibili.service.SettingsService
+import com.example.sillybilibili.service.VideoConverterService
 import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -53,7 +63,8 @@ data class HomeUiState(
     val filterState: FilterState = FilterState(), val currentPage: Int = 0,
     val isLoading: Boolean = false, val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
-    val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null
+    val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null,
+    val isSelectionMode: Boolean = false, val selectedIds: Set<Long> = emptySet()
 ) { companion object { const val PAGE_SIZE = 40 } }
 
 /** Starts the next database page early enough that long lists do not visibly pause at the end. */
@@ -100,7 +111,12 @@ class HomeViewModel @Inject constructor(
     private val videoScanService: VideoScanService,
     private val coverCacheService: CoverCacheService? = null,
     private val externalMediaSyncService: ExternalMediaSyncService? = null,
-    private val onlineVideoStatusService: OnlineVideoStatusService? = null
+    private val onlineVideoStatusService: OnlineVideoStatusService? = null,
+    private val integrityChecker: MediaIntegrityChecker? = null,
+    private val conversionJobRegistry: ConversionJobRegistry? = null,
+    private val settingsService: SettingsService? = null,
+    private val videoConverterService: VideoConverterService? = null,
+    @ApplicationContext private val appContext: Context? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -128,6 +144,10 @@ class HomeViewModel @Inject constructor(
 
     /** 可注入的时间源（测试中用于推进限频重试间隔）。 */
     internal var coverClock: () -> Long = System::currentTimeMillis
+
+    /** 批量转换队列：一次只跑一个，前一个结束后自动启动下一个。 */
+    private val conversionQueue = ArrayDeque<Video>()
+    private var conversionPump: Job? = null
 
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
@@ -378,6 +398,117 @@ class HomeViewModel @Inject constructor(
 
     fun clearError() { _uiState.update { it.copy(errorMessage = null) } }
     suspend fun getDefaultScanPath(): String? = videoScanService.getDefaultBilibiliPath()
+
+    // ── 多选 / 批量操作 ────────────────────────────────────────
+
+    fun enterSelectionMode() { _uiState.update { it.copy(isSelectionMode = true) } }
+
+    fun exitSelectionMode() {
+        _uiState.update { it.copy(isSelectionMode = false, selectedIds = emptySet()) }
+    }
+
+    fun toggleSelection(videoId: Long) {
+        _uiState.update { state ->
+            val updated = state.selectedIds.toMutableSet()
+            if (!updated.add(videoId)) updated.remove(videoId)
+            state.copy(selectedIds = updated)
+        }
+    }
+
+    fun toggleSelectAll() {
+        _uiState.update { state ->
+            val allIds = state.videos.map { it.id }.toSet()
+            val allSelected = state.selectedIds.containsAll(allIds)
+            state.copy(selectedIds = if (allSelected) emptySet() else allIds)
+        }
+    }
+
+    fun selectedVideos(): List<Video> {
+        val state = _uiState.value
+        return state.videos.filter { it.id in state.selectedIds }
+    }
+
+    /** 批量转换为 MP4：一次一个，逐个排队执行（由前台服务串行处理）。 */
+    fun batchConvertToMp4() {
+        val videos = selectedVideos()
+        if (videos.isEmpty()) return
+        exitSelectionMode()
+        val registry = conversionJobRegistry ?: return
+        val context = appContext ?: return
+        conversionQueue.addAll(videos)
+        showMessage("已加入 ${videos.size} 个转换任务，将逐个执行")
+        if (conversionPump == null) {
+            conversionPump = viewModelScope.launch {
+                registry.jobs.collect { launchNextConversion(context) }
+            }
+        }
+        launchNextConversion(context)
+    }
+
+    private fun launchNextConversion(context: Context) {
+        val registry = conversionJobRegistry ?: return
+        val next = conversionQueue.firstOrNull() ?: return
+        if (registry.isRunning(next.id)) return
+        conversionQueue.removeFirst()
+        val outputDir = settingsService?.outputPath ?: videoConverterService?.getDefaultOutputPath() ?: return
+        ConversionForegroundService.start(
+            context,
+            ConversionForegroundService.ConversionRequest(
+                videoId = next.id,
+                videoPath = next.path,
+                audioPath = next.audioPath,
+                outputDir = outputDir,
+                outputFileName = next.title
+            )
+        )
+    }
+
+    /** 批量强制刷新在线状态（忽略缓存窗口）。 */
+    fun batchRefreshOnlineStatus() {
+        val videos = selectedVideos()
+        if (videos.isEmpty()) return
+        exitSelectionMode()
+        val service = onlineVideoStatusService ?: return
+        viewModelScope.launch {
+            var online = 0; var unavailable = 0; var unverifiable = 0
+            videos.forEach { video ->
+                val status = service.forceCheck(video)
+                when (status) {
+                    OnlineVideoStatus.ONLINE -> online++
+                    OnlineVideoStatus.UNAVAILABLE -> unavailable++
+                    else -> unverifiable++
+                }
+                _uiState.update { state ->
+                    state.copy(videos = state.videos.map {
+                        if (it.id == video.id) it.copy(onlineStatus = status, onlineCheckedAt = System.currentTimeMillis()) else it
+                    })
+                }
+            }
+            showMessage("状态刷新完成：$online 在线、$unavailable 不可用、$unverifiable 无法核验")
+        }
+    }
+
+    /** 批量检查媒体文件完整性（video/audio.m4s 是否存在且非空）。 */
+    fun batchCheckIntegrity() {
+        val videos = selectedVideos()
+        if (videos.isEmpty()) return
+        exitSelectionMode()
+        val checker = integrityChecker ?: return
+        viewModelScope.launch {
+            val results = checker.checkAll(videos)
+            val ok = results.count { it.status == MediaIntegrityStatus.OK }
+            val videoMissing = results.count { it.status == MediaIntegrityStatus.VIDEO_MISSING || it.status == MediaIntegrityStatus.BOTH_MISSING }
+            val audioMissing = results.count { it.status == MediaIntegrityStatus.AUDIO_MISSING }
+            val unknown = results.count { it.status == MediaIntegrityStatus.UNKNOWN }
+            showMessage(
+                "完整性检查完成：$ok 完好、$videoMissing 视频缺失、$audioMissing 音频缺失、$unknown 无法确认"
+            )
+        }
+    }
+
+    private fun showMessage(message: String) {
+        _uiState.update { it.copy(errorMessage = message) }
+    }
 
     private fun currentLoadKey(): LoadKey = LoadKey(
         categoryId = _selectedCategoryId.value,

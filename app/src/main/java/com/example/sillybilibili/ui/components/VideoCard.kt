@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -61,6 +62,10 @@ fun VideoCard(
     onLongClick: () -> Unit = {},
     onCoverRequested: (Video) -> Unit = {},
     onOnlineStatusRequested: (Video) -> Unit = {},
+    /** 多选模式：显示复选框，点击切换选中而不是播放。 */
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onSelect: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = if (video.isVertical) NeonPurple else CyberVermilion
@@ -74,9 +79,14 @@ fun VideoCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier = modifier.fillMaxWidth().combinedClickable(
+            onClick = if (selectionMode) onSelect else onClick,
+            onLongClick = if (selectionMode) onSelect else onLongClick
+        ),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
         border = CardDefaults.outlinedCardBorder(enabled = true).copy(brush = Brush.linearGradient(listOf(GlassHighlight, accent.copy(alpha = 0.52f), DarkDivider)))
     ) {
@@ -85,6 +95,9 @@ fun VideoCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = { onSelect() })
+            }
             VideoThumbnail(video = video, accent = accent)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

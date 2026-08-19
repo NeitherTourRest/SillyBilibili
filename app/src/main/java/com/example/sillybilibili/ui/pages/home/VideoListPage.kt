@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,14 +39,43 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
     LaunchedEffect(categoryId) { viewModel.setCategoryId(categoryId) }
     LaunchedEffect(listState) { snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { if (it != null && it >= uiState.videos.size - 5) viewModel.loadMore() } }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearError()
+        }
+    }
+
     Scaffold(
         topBar = {
-            AppTopBar(title = uiState.categoryName, subtitle = "按分类浏览视频", onNavigateBack = onNavigateBack)
+            AppTopBar(
+                title = if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else uiState.categoryName,
+                subtitle = if (uiState.isSelectionMode) null else "按分类浏览视频",
+                onNavigateBack = if (uiState.isSelectionMode) viewModel::exitSelectionMode else onNavigateBack
+            ) {
+                if (uiState.isSelectionMode) {
+                    TextButton(onClick = viewModel::toggleSelectAll) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, "完成选择", tint = DarkTextSecondary) }
+                } else {
+                    TextButton(onClick = viewModel::enterSelectionMode, enabled = uiState.videos.isNotEmpty()) { Text("多选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                }
+            }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = DarkBackground
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
-            SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索此分类")
+            if (uiState.isSelectionMode) {
+                BatchActionBar(
+                    hasSelection = uiState.selectedIds.isNotEmpty(),
+                    onConvertToMp4 = viewModel::batchConvertToMp4,
+                    onRefreshStatus = viewModel::batchRefreshOnlineStatus,
+                    onCheckIntegrity = viewModel::batchCheckIntegrity
+                )
+            } else {
+                SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索此分类")
+            }
             if (uiState.isLoading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) }
             else if (uiState.videos.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("这个分类暂时没有视频", color = DarkTextSecondary, fontWeight = FontWeight.Bold) }
             else Column(Modifier.weight(1f)) {
@@ -56,7 +86,10 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                             onClick = { latestOnNavigate(video, latestVideos) },
                             onLongClick = { contextMenuVideo = video },
                             onCoverRequested = viewModel::requestCover,
-                            onOnlineStatusRequested = viewModel::requestOnlineStatus
+                            onOnlineStatusRequested = viewModel::requestOnlineStatus,
+                            selectionMode = uiState.isSelectionMode,
+                            selected = video.id in uiState.selectedIds,
+                            onSelect = { viewModel.toggleSelection(video.id) }
                         )
                     }
                     if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) } }

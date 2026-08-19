@@ -15,6 +15,8 @@ import com.example.sillybilibili.service.PlaybackReadAheadPreloader
 import com.example.sillybilibili.service.PlaybackFirstFrameExtractor
 import com.example.sillybilibili.service.PreparedPlaybackItem
 import com.example.sillybilibili.service.SettingsService
+import com.example.sillybilibili.service.MediaIntegrityChecker
+import com.example.sillybilibili.service.MediaIntegrityStatus
 import com.example.sillybilibili.service.OnlineVideoStatusService
 import com.example.sillybilibili.service.VideoConverterService
 import com.example.sillybilibili.domain.model.OnlineVideoStatus
@@ -46,7 +48,8 @@ class PlayerViewModel @Inject constructor(
     private val onlineVideoStatusService: OnlineVideoStatusService,
     private val videoConverterService: VideoConverterService,
     private val conversionJobRegistry: ConversionJobRegistry,
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    private val integrityChecker: MediaIntegrityChecker
 ) : ViewModel() {
     private val _state = MutableStateFlow(PlayerPreparationState())
     val state: StateFlow<PlayerPreparationState> = _state.asStateFlow()
@@ -56,6 +59,9 @@ class PlayerViewModel @Inject constructor(
     /** 当前播放条目的完整数据库记录（av/BV 号、发布时间、缓存时间等）。 */
     private val _currentVideo = MutableStateFlow<Video?>(null)
     val currentVideo: StateFlow<Video?> = _currentVideo.asStateFlow()
+    /** 最近一次文件完整性检查结果（null = 尚未检查）。 */
+    private val _integrityStatus = MutableStateFlow<MediaIntegrityStatus?>(null)
+    val integrityStatus: StateFlow<MediaIntegrityStatus?> = _integrityStatus.asStateFlow()
     private val _conversionProgress = MutableStateFlow<ConversionProgress?>(null)
     val conversionProgress: StateFlow<ConversionProgress?> = _conversionProgress.asStateFlow()
     private val _swipePreviewFrames = MutableStateFlow<Map<Int, Bitmap>>(emptyMap())
@@ -124,6 +130,22 @@ class PlayerViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _currentVideo.value = videoRepository.getVideoById(videoId)
+        }
+    }
+
+    /** 播放页手动刷新当前视频的在线状态（忽略缓存窗口）。 */
+    fun refreshOnlineStatus() {
+        val video = _currentVideo.value ?: return
+        viewModelScope.launch {
+            _onlineStatus.value = onlineVideoStatusService.forceCheck(video)
+        }
+    }
+
+    /** 播放页手动检查当前视频的媒体文件完整性。 */
+    fun checkMediaIntegrity() {
+        val video = _currentVideo.value ?: return
+        viewModelScope.launch {
+            _integrityStatus.value = integrityChecker.check(video).status
         }
     }
 
