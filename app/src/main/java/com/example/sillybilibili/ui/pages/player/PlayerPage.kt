@@ -25,11 +25,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -144,6 +147,7 @@ fun PlayerPage(
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var showQueueSheet by remember { mutableStateOf(false) }
     var showSleepTimerSheet by remember { mutableStateOf(false) }
+    var showDetailSheet by remember { mutableStateOf(false) }
     var playerError by remember { mutableStateOf<String?>(null) }
     var activeIndex by remember { mutableIntStateOf(initialIndex) }
     var shizukuFallbackAttempted by remember(queueId) { mutableStateOf(false) }
@@ -528,26 +532,13 @@ fun PlayerPage(
     }
         if (!isFullscreen) LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
             item {
-                PlayerInfoPanel(
+                PlayerSummaryHeader(
                     title = controller?.mediaMetadata?.title?.toString().orEmpty().ifBlank { queue?.items?.getOrNull(activeIndex)?.title.orEmpty() },
                     activeIndex = activeIndex,
                     queueSize = queue?.items?.size ?: 0,
                     onlineStatus = onlineStatus,
-                    activeItem = queue?.items?.getOrNull(activeIndex),
-                    currentVideo = currentVideo,
                     currentCategory = currentCategory,
-                    integrityStatus = integrityStatus,
-                    conversionProgress = conversionProgress,
-                    onConvertToMp4 = viewModel::convertToMp4,
-                    backgroundPlaybackEnabled = backgroundPlaybackEnabled,
-                    durationMs = durationMs,
-                    playbackSpeed = playbackSpeed,
-                    videoAspectRatio = videoAspectRatio,
-                    usesShizukuDataSource = preparation.usesShizukuDataSource,
-                    onShowEpisodes = { showQueueSheet = true },
-                    onSleepTimer = { showSleepTimerSheet = true },
-                    onRefreshStatus = viewModel::refreshOnlineStatus,
-                    onCheckIntegrity = viewModel::checkMediaIntegrity
+                    onShowDetails = { showDetailSheet = true }
                 )
             }
             item {
@@ -571,6 +562,33 @@ fun PlayerPage(
                     }
                 )
             }
+        }
+    }
+
+    if (showDetailSheet) {
+        ModalBottomSheet(onDismissRequest = { showDetailSheet = false }, containerColor = DarkSurface) {
+            PlayerInfoPanel(
+                title = controller?.mediaMetadata?.title?.toString().orEmpty().ifBlank { queue?.items?.getOrNull(activeIndex)?.title.orEmpty() },
+                activeIndex = activeIndex,
+                queueSize = queue?.items?.size ?: 0,
+                onlineStatus = onlineStatus,
+                activeItem = queue?.items?.getOrNull(activeIndex),
+                currentVideo = currentVideo,
+                currentCategory = currentCategory,
+                integrityStatus = integrityStatus,
+                conversionProgress = conversionProgress,
+                onConvertToMp4 = viewModel::convertToMp4,
+                backgroundPlaybackEnabled = backgroundPlaybackEnabled,
+                durationMs = durationMs,
+                playbackSpeed = playbackSpeed,
+                videoAspectRatio = videoAspectRatio,
+                usesShizukuDataSource = preparation.usesShizukuDataSource,
+                onShowEpisodes = { showQueueSheet = true; showDetailSheet = false },
+                onSleepTimer = { showSleepTimerSheet = true; showDetailSheet = false },
+                onRefreshStatus = viewModel::refreshOnlineStatus,
+                onCheckIntegrity = viewModel::checkMediaIntegrity,
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)
+            )
         }
     }
 
@@ -825,6 +843,62 @@ private fun FullscreenSwipePreview(item: PlaybackQueueItem?, frame: Bitmap?, mod
     }
 }
 
+/**
+ * 播放页信息栏的折叠形态：标题 + 集数/分类/在线状态 + “详情”入口。
+ * 完整信息（av/BV、发布时间、完整性、操作按钮等）收进底部弹层，播放页保持清爽。
+ */
+@Composable
+private fun PlayerSummaryHeader(
+    title: String,
+    activeIndex: Int,
+    queueSize: Int,
+    onlineStatus: com.example.sillybilibili.domain.model.OnlineVideoStatus,
+    currentCategory: com.example.sillybilibili.domain.model.Category?,
+    onShowDetails: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().clickable(onClick = onShowDetails).padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            title.ifBlank { "正在播放" },
+            color = DarkTextPrimary,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("本地缓存 · 第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+                currentCategory?.let { cat ->
+                    val catColor = Color(cat.color)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = catColor.copy(alpha = 0.14f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, catColor.copy(alpha = 0.36f))
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(catColor))
+                            Text(cat.name, style = MaterialTheme.typography.labelSmall, color = catColor, maxLines = 1)
+                        }
+                    }
+                }
+                OnlineStatusBadge(onlineStatus)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("详情", color = CyberVermilion, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = CyberVermilion, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
 @Composable
 private fun PlayerInfoPanel(
     title: String,
@@ -845,9 +919,10 @@ private fun PlayerInfoPanel(
     onShowEpisodes: () -> Unit,
     onSleepTimer: () -> Unit,
     onRefreshStatus: () -> Unit,
-    onCheckIntegrity: () -> Unit
+    onCheckIntegrity: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title.ifBlank { "正在播放" }, color = DarkTextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("本地缓存 · 第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
