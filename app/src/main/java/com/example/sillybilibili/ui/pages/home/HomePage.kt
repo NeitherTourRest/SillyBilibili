@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +35,6 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -63,7 +61,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,7 +72,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -136,16 +132,7 @@ fun HomePage(
     val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
     val latestVideos by rememberUpdatedState(uiState.videos)
     val categoryById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
-    LaunchedEffect(uiState.currentPage, uiState.gridViewEnabled) {
-        // A page owns only 40 cards. 前进翻页回到页首；后退翻页定位到页尾，
-        // 防止 Compose 保留旧页尾位置导致自动翻页。
-        if (uiState.videos.isEmpty()) return@LaunchedEffect
-        // 顶部“上滑返回上一页”提示条占一个 item（仅在非第一页时出现）
-        val hintOffset = if (uiState.currentPage > 0) 1 else 0
-        val target = if (uiState.pageDirection < 0) (uiState.videos.size - 1 + hintOffset).coerceAtLeast(0) else 0
-        if (uiState.gridViewEnabled) gridState.scrollToItem(target) else listState.scrollToItem(target)
-    }
-    LaunchedEffect(listState, uiState.currentPage, uiState.videos.size, uiState.hasMoreData, uiState.gridViewEnabled) {
+    LaunchedEffect(listState, uiState.videos.size, uiState.hasMoreData, uiState.gridViewEnabled) {
         if (uiState.gridViewEnabled) return@LaunchedEffect
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { lastIndex ->
             if (shouldPrefetchHomePage(lastIndex, uiState.videos.size, uiState.hasMoreData)) {
@@ -156,7 +143,7 @@ fun HomePage(
             }
         }
     }
-    LaunchedEffect(gridState, uiState.currentPage, uiState.videos.size, uiState.hasMoreData, uiState.gridViewEnabled) {
+    LaunchedEffect(gridState, uiState.videos.size, uiState.hasMoreData, uiState.gridViewEnabled) {
         if (!uiState.gridViewEnabled) return@LaunchedEffect
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }.collect { lastIndex ->
             if (shouldPrefetchHomePage(lastIndex, uiState.videos.size, uiState.hasMoreData)) {
@@ -257,30 +244,6 @@ fun HomePage(
                 }
             }
 
-            // 页首偏移 C 随滚动实时更新（列表/宫格各自取第一个可见项，减去顶部提示条占位）
-            val headerOffset by remember(listState, gridState, uiState.gridViewEnabled, uiState.currentPage, uiState.videos.size) {
-                derivedStateOf {
-                    val hintOffset = if (uiState.currentPage > 0) 1 else 0
-                    val first = (if (uiState.gridViewEnabled) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex) - hintOffset
-                    first.coerceIn(0, (uiState.videos.size - 1).coerceAtLeast(0))
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    // 位置指示：第 A 页 * 每页 B 个 + 页首偏移 C / 总视频数 D
-                    if (uiState.videos.isEmpty()) "视频库"
-                    else "${uiState.currentPage + 1} * ${HomeUiState.PAGE_SIZE} + $headerOffset / ${uiState.totalVideoCount}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                if (uiState.filterState.isActive) {
-                    Text("已启用筛选", style = MaterialTheme.typography.labelSmall, color = CyberVermilion)
-                }
-            }
             }
 
             when {
@@ -317,11 +280,6 @@ fun HomePage(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        if (uiState.currentPage > 0) {
-                            item(key = "previous-page-hint-grid", span = { GridItemSpan(maxLineSpan) }) {
-                                PreviousPageHint(onGoBack = viewModel::goToPreviousPage)
-                            }
-                        }
                         gridItems(uiState.videos, key = { it.id }, contentType = { "video-grid" }) { video ->
                             VideoGridCard(
                                 video = video,
@@ -344,11 +302,6 @@ fun HomePage(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        if (uiState.currentPage > 0) {
-                            item(key = "previous-page-hint", contentType = "hint") {
-                                PreviousPageHint(onGoBack = viewModel::goToPreviousPage)
-                            }
-                        }
                         items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
                             VideoCard(
                                 video = video,
@@ -430,33 +383,4 @@ private fun EmptyVideoLibrary(onScan: () -> Unit) {
     )
 }
 
-/**
- * “上滑返回上一页”提示条：位于非第一页的列表顶部。
- * 列表已滚到顶部时，手指在此区域继续上滑即回到上一页（拖动结束后触发）。
- */
-@Composable
-private fun PreviousPageHint(onGoBack: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .pointerInput(Unit) {
-                var accumulated = 0f
-                detectVerticalDragGestures(
-                    onVerticalDrag = { _, dragAmount -> accumulated += dragAmount },
-                    onDragEnd = {
-                        // 上滑 dragAmount 为负：累积位移超过约 60dp 视为切页意图
-                        if (accumulated <= -60.dp.toPx()) onGoBack()
-                        accumulated = 0f
-                    },
-                    onDragCancel = { accumulated = 0f }
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = DarkTextTertiary, modifier = Modifier.size(18.dp))
-            Text("上滑返回上一页", style = MaterialTheme.typography.labelMedium, color = DarkTextTertiary)
-        }
-    }
-}
+

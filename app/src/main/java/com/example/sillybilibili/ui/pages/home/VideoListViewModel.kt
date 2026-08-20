@@ -35,7 +35,6 @@ data class VideoListUiState(
     val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true,
     val searchQuery: String = "",
-    val currentPage: Int = 0,
     val categories: List<Category> = emptyList(),
     val filterState: FilterState = FilterState(),
     val isSelectionMode: Boolean = false,
@@ -77,6 +76,8 @@ class VideoListViewModel @Inject constructor(
     private val _categoryRefreshTrigger = MutableStateFlow(0L)
     private val _loadDataTrigger = MutableStateFlow(0L)
     private val _filterSnapshot = MutableStateFlow(FilterSnapshot(FilterState(), "", 0L))
+    /** 无限滚动：已追加加载的批次数。 */
+    private var loadedBatchCount = 0
 
     private val _debouncedSearch = _searchQuery.debounce(300L).distinctUntilChanged()
 
@@ -180,10 +181,11 @@ class VideoListViewModel @Inject constructor(
 
                     val videos = loadPage(catId, query, fs, page = 0)
                     val hasMore = videos.size == VideoListUiState.PAGE_SIZE
+                    loadedBatchCount = 0
 
                     _uiState.update {
                         it.copy(videos = videos, categories = categories, categoryName = categoryName,
-                            currentPage = 0, isLoading = false, searchQuery = query,
+                            isLoading = false, searchQuery = query,
                             filterState = fs.filter, hasMoreData = hasMore)
                     }
                 }
@@ -219,44 +221,17 @@ class VideoListViewModel @Inject constructor(
         if (state.isLoadingMore || !state.hasMoreData) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true) }
-            val nextPage = state.currentPage + 1
+            val batch = loadedBatchCount + 1
             val fs = _filterSnapshot.value
             val more = loadPage(
                 categoryId = _categoryId.value,
-                query = state.searchQuery, fs = fs, page = nextPage
+                query = state.searchQuery, fs = fs, page = batch
             )
+            loadedBatchCount = batch
             _uiState.update {
-                it.copy(videos = it.videos + more, currentPage = nextPage,
+                it.copy(videos = it.videos + more,
                     isLoadingMore = false, hasMoreData = more.size == VideoListUiState.PAGE_SIZE)
             }
-        }
-    }
-
-    fun goToPage(page: Int) {
-        if (page < 0) return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
-            val fs = _filterSnapshot.value
-            val videos = loadPage(
-                categoryId = _categoryId.value,
-                query = _searchQuery.value, fs = fs, page = page
-            )
-            _uiState.update {
-                it.copy(videos = videos, currentPage = page, isLoading = false,
-                    hasMoreData = videos.size == VideoListUiState.PAGE_SIZE)
-            }
-        }
-    }
-
-    fun loadAll() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
-            val fs = _filterSnapshot.value
-            val all = loadPage(
-                categoryId = _categoryId.value,
-                query = _searchQuery.value, fs = fs, page = 0, pageSize = Int.MAX_VALUE
-            )
-            _uiState.update { it.copy(videos = all, isLoading = false, hasMoreData = false) }
         }
     }
 

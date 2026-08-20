@@ -27,7 +27,7 @@ import androidx.compose.ui.res.stringResource
 import com.example.sillybilibili.R
 import com.example.sillybilibili.ui.theme.CyberGold
 import com.example.sillybilibili.ui.theme.CyberVermilion
-import com.example.sillybilibili.ui.theme.DarkSurface
+import com.example.sillybilibili.ui.theme.DarkBackground
 import com.example.sillybilibili.ui.theme.DarkTextSecondary
 import com.example.sillybilibili.ui.theme.GlassBorder
 
@@ -44,11 +44,11 @@ fun AppTopBar(
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     Column(
-        Modifier.fillMaxWidth().background(
-            Brush.verticalGradient(listOf(DarkSurface.copy(alpha = 0.82f), DarkSurface.copy(alpha = 0.30f), Color.Transparent))
-        )
+        Modifier.fillMaxWidth().background(DarkBackground)
     ) {
         TopAppBar(
+            // 紧凑高度：避免状态栏下方再留一大段空白
+            modifier = Modifier.height(56.dp),
             title = {
                 if (titleContent != null) {
                     titleContent()

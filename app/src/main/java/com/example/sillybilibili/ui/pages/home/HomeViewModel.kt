@@ -61,19 +61,15 @@ data class FilterState(
 data class HomeUiState(
     val videos: List<Video> = emptyList(), val categories: List<Category> = emptyList(),
     val selectedCategoryId: Long? = null, val searchQuery: String = "",
-    val filterState: FilterState = FilterState(), val currentPage: Int = 0,
+    val filterState: FilterState = FilterState(),
     val isLoading: Boolean = false, val isLoadingMore: Boolean = false,
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
     val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null,
     val isSelectionMode: Boolean = false, val selectedIds: Set<Long> = emptySet(),
-    /** 最近一次翻页方向：1 = 下一页（滚回页首），-1 = 上一页（滚到页尾）。 */
-    val pageDirection: Int = 1,
     /** 首页宫格视图开关（false = 列表视图）。 */
     val gridViewEnabled: Boolean = false,
     /** 批量操作实时进度（转换/刷新状态/完整性检查）。 */
-    val batchProgress: BatchProgress? = null,
-    /** 扫描库中的视频总数（sourceAvailable = 1），用于页头位置指示。 */
-    val totalVideoCount: Int = 0
+    val batchProgress: BatchProgress? = null
 ) { companion object { const val PAGE_SIZE = 40 } }
 
 /** Starts the next database page early enough that long lists do not visibly pause at the end. */
@@ -139,6 +135,8 @@ class HomeViewModel @Inject constructor(
     /** Invalidates preloaded pages after search, filter, category or database changes. */
     private var pagingEpoch = 0L
     private var prefetchedPage: PrefetchedHomePage? = null
+    /** 无限滚动：已追加加载的批次数（不再有“页”的概念，列表只增不减）。 */
+    private var loadedBatchCount = 0
 
     /**
      * 卡片进入屏幕时每个视频的封面/在线核验在会话内只做必要的次数：成功的请求永久去重，
@@ -153,14 +151,6 @@ class HomeViewModel @Inject constructor(
 
     /** 可注入的时间源（测试中用于推进限频重试间隔）。 */
     internal var coverClock: () -> Long = System::currentTimeMillis
-
-    /** 后退翻页后短暂抑制自动前进翻页：定位到页尾会让 lastVisibleIndex 越过阈值，
-     *  不抑制会立刻又翻回下一页。仅影响自动前进，不拦截手势触发的后退切页。 */
-    private var lastBackwardSwitchAt = Long.MIN_VALUE
-    private val pageSwitchSuppressMs = 800L
-
-    private fun suppressAutoAdvance(): Boolean =
-        lastBackwardSwitchAt != Long.MIN_VALUE && coverClock() - lastBackwardSwitchAt < pageSwitchSuppressMs
 
     /** 批量转换队列：一次只跑一个，前一个结束后自动启动下一个。 */
     private val conversionQueue = ArrayDeque<Video>()
@@ -243,6 +233,7 @@ class HomeViewModel @Inject constructor(
                 .collectLatest { (key, fs) ->
                     val epoch = ++pagingEpoch
                     prefetchedPage = null
+                    loadedBatchCount = 0
                     // 已有列表时静默刷新：旧结果保留到新结果到达，避免闪烁。
                     _uiState.update { it.copy(isLoading = it.videos.isEmpty(), isLoadingMore = false) }
                     val videos = loadPage(
@@ -250,16 +241,13 @@ class HomeViewModel @Inject constructor(
                         query = key.query, fs = fs, page = 0
                     )
                     if (epoch != pagingEpoch) return@collectLatest
-                    val totalVideoCount = videoRepository.getTotalVideoCount()
                     _uiState.update {
                         it.copy(
                             videos = videos,
                             selectedCategoryId = key.categoryId,
                             filterState = fs.filter,
-                            currentPage = 0,
                             isLoading = false,
-                            hasMoreData = videos.size == HomeUiState.PAGE_SIZE,
-                            totalVideoCount = totalVideoCount
+                            hasMoreData = videos.size == HomeUiState.PAGE_SIZE
                         )
                     }
                     if (videos.size == HomeUiState.PAGE_SIZE) {
@@ -293,111 +281,51 @@ class HomeViewModel @Inject constructor(
 
     // ── Pagination ────────────────────────────────────────────
 
-    /** Preloads the following database page without creating more Compose card nodes. */
+    /** Preloads the following database batch without creating more Compose card nodes. */
     fun prefetchNextPage() {
         val state = _uiState.value
         if (!state.hasMoreData || state.isLoading || state.isLoadingMore) return
-        val page = state.currentPage + 1
+        val batch = loadedBatchCount + 1
         val cache = prefetchedPage
-        if (cache?.epoch == pagingEpoch && cache.page == page) return
+        if (cache?.epoch == pagingEpoch && cache.page == batch) return
         prefetchPage(
-            page = page,
+            page = batch,
             epoch = pagingEpoch,
             key = currentLoadKey(),
             fs = _filterSnapshot.value
         )
     }
 
-    /** Replaces the visible page instead of appending indefinitely, keeping scrolling fast. */
+    /** 无限滚动：把下一批视频追加到列表尾部，列表只增不减。 */
     fun loadMore() {
         val state = _uiState.value
         if (state.isLoadingMore || state.isLoading || !state.hasMoreData) return
-        // 刚后退翻页时滚动定位停在页尾，短暂抑制自动前进翻页
-        if (suppressAutoAdvance()) return
-        val page = state.currentPage + 1
+        val batch = loadedBatchCount + 1
         val epoch = pagingEpoch
         val key = currentLoadKey()
         val fs = _filterSnapshot.value
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true) }
-            val cached = prefetchedPage?.takeIf { it.epoch == epoch && it.page == page }
-            val videos = cached?.videos ?: loadPage(key.categoryId, key.query, fs, page)
+            val cached = prefetchedPage?.takeIf { it.epoch == epoch && it.page == batch }
+            val more = cached?.videos ?: loadPage(key.categoryId, key.query, fs, batch)
             if (epoch != pagingEpoch) return@launch
             prefetchedPage = null
+            loadedBatchCount = batch
             _uiState.update {
                 it.copy(
-                    videos = videos,
-                    currentPage = page,
+                    videos = it.videos + more,
                     isLoadingMore = false,
-                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE,
-                    pageDirection = 1
+                    hasMoreData = more.size == HomeUiState.PAGE_SIZE
                 )
             }
-            if (videos.size == HomeUiState.PAGE_SIZE) {
-                prefetchPage(page + 1, epoch, key, fs)
+            if (more.size == HomeUiState.PAGE_SIZE) {
+                prefetchPage(batch + 1, epoch, key, fs)
             }
         }
     }
 
-    /**
-     * 上滑切页：回到上一页（替换当前页），UI 负责滚动到页尾。
-     */
-    fun goToPreviousPage() {
-        val state = _uiState.value
-        if (state.currentPage <= 0 || state.isLoading || state.isLoadingMore) return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingMore = true) }
-            val page = state.currentPage - 1
-            val key = currentLoadKey()
-            val fs = _filterSnapshot.value
-            val videos = loadPage(key.categoryId, key.query, fs, page)
-            if (_uiState.value.currentPage - 1 != page) return@launch
-            _uiState.update {
-                it.copy(
-                    videos = videos,
-                    currentPage = page,
-                    isLoadingMore = false,
-                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE,
-                    pageDirection = -1
-                )
-            }
-            lastBackwardSwitchAt = coverClock()
-        }
-    }
 
-    fun goToPage(page: Int) {
-        if (page < 0) return
-        viewModelScope.launch {
-            val epoch = ++pagingEpoch
-            prefetchedPage = null
-            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
-            val fs = _filterSnapshot.value
-            val videos = loadPage(
-                categoryId = _selectedCategoryId.value,
-                query = _searchQuery.value, fs = fs, page = page
-            )
-            if (epoch != pagingEpoch) return@launch
-            _uiState.update {
-                it.copy(videos = videos, currentPage = page, isLoading = false,
-                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE)
-            }
-            if (videos.size == HomeUiState.PAGE_SIZE) {
-                prefetchPage(page + 1, epoch, currentLoadKey(), fs)
-            }
-        }
-    }
 
-    fun loadAll() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.videos.isEmpty()) }
-            val fs = _filterSnapshot.value
-            val all = loadPage(
-                categoryId = _selectedCategoryId.value,
-                query = _searchQuery.value, fs = fs, page = 0, pageSize = Int.MAX_VALUE
-            )
-            _uiState.update { it.copy(videos = all, isLoading = false, hasMoreData = false) }
-        }
-    }
 
     // ── User actions (with no-op guards) ──────────────────────
 

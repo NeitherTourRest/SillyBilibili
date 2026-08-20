@@ -103,13 +103,10 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                     }
                     if (uiState.isLoadingMore) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion, trackColor = CyberVermilion.copy(alpha = 0.1f)) } }
                 }
-                if (uiState.videos.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = { val p = uiState.currentPage - 1; if (p >= 0) viewModel.goToPage(p) }, enabled = uiState.currentPage > 0) { Text("上一页", fontWeight = FontWeight.Bold) }
-                        Text("第 ${uiState.currentPage + 1} 页", style = MaterialTheme.typography.labelMedium, color = DarkTextTertiary, fontWeight = FontWeight.Bold)
-                        OutlinedButton(onClick = { viewModel.goToPage(uiState.currentPage + 1) }, enabled = uiState.hasMoreData) { Text("下一页", fontWeight = FontWeight.Bold) }
+                if (uiState.videos.isNotEmpty() && uiState.hasMoreData && !uiState.isLoadingMore) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                        Text("上滑加载更多", style = MaterialTheme.typography.labelSmall, color = DarkTextTertiary)
                     }
-                    if (uiState.hasMoreData && !uiState.isLoadingMore) TextButton(onClick = { viewModel.loadAll() }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(MaterialTheme.shapes.medium).background(DarkSurfaceVariant)) { Text("加载全部（${uiState.videos.size}+）", fontWeight = FontWeight.Bold, color = CyberVermilion) }
                 }
             }
         }
