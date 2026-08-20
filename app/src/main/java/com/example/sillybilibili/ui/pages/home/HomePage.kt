@@ -181,8 +181,9 @@ fun HomePage(
                 title = if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else stringResource(R.string.app_name),
                 titleContent = if (uiState.isSelectionMode) null else ({
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // 用 PNG 前景图而非 adaptive-icon XML（后者在部分 ROM 上解码异常会闪退）
                         Icon(
-                            painter = painterResource(R.mipmap.ic_launcher),
+                            painter = painterResource(R.drawable.sillybilibili_sbb_mark),
                             contentDescription = null,
                             modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp))
                         )
