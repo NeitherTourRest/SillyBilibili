@@ -66,6 +66,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -170,6 +171,8 @@ fun PlayerPage(
     var isSettlingFullscreenSwipe by remember { mutableStateOf(false) }
     var swipeWarmupIndex by remember { mutableIntStateOf(-1) }
     var settledSwipePreviewIndex by remember { mutableIntStateOf(-1) }
+    var isLeavingPlayer by remember { mutableStateOf(false) }
+    var isPlayerSurfaceAttached by remember { mutableStateOf(true) }
     val playerDetailsListState = rememberLazyListState()
     var nonFullscreenViewportWidthPx by remember { mutableIntStateOf(0) }
     var portraitViewportHeightPx by remember { mutableIntStateOf(0) }
@@ -344,12 +347,23 @@ fun PlayerPage(
         }
     }
 
-    val leavePlayer = {
+    fun leavePlayer() {
+        if (isLeavingPlayer) return
+        // Detach the Surface before NavHost changes composition. Otherwise SurfaceView can keep
+        // its last decoded frame for one compositor frame on the destination page.
+        isLeavingPlayer = true
+        controlsVisible = false
+        isPlayerSurfaceAttached = false
+        controller?.clearVideoSurface()
         if (!viewModel.shouldKeepPlayingAfterLeaving()) {
             controller?.pause()
             PlaybackService.stopPlayback(context)
         }
-        onNavigateBack()
+        scope.launch {
+            // Let the black replacement frame commit before disposing PlayerView/MediaController.
+            withFrameNanos { }
+            onNavigateBack()
+        }
     }
     androidx.activity.compose.BackHandler {
         if (isFullscreen) {
@@ -476,7 +490,7 @@ fun PlayerPage(
         AndroidView(
             factory = { viewContext ->
                 PlayerView(viewContext).apply {
-                    player = controller
+                    player = controller.takeIf { isPlayerSurfaceAttached }
                     // Media3 remains responsible for decoding and MediaSession integration.
                     // Compose provides a control hierarchy suited to this app's layout.
                     useController = false
@@ -485,7 +499,7 @@ fun PlayerPage(
                 }
             },
             update = { playerView ->
-                playerView.player = controller
+                playerView.player = controller.takeIf { isPlayerSurfaceAttached }
                 playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             },
             modifier = Modifier.fillMaxSize()
@@ -583,6 +597,12 @@ fun PlayerPage(
                 },
                 onToggleFullscreen = { setFullscreen(!isFullscreen) }
             )
+        }
+
+        if (isLeavingPlayer) {
+            // Plain opaque replacement frame prevents a stale SurfaceView frame from leaking
+            // into the destination while the navigation transition disposes the player.
+            Box(Modifier.fillMaxSize().background(Color.Black).zIndex(20f))
         }
 
         if ((controller == null || preparation.isPreparing) && playerError == null) {
