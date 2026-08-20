@@ -223,7 +223,13 @@ fun PlayerPage(
                 )
                 .build()
         }
-        if (activeController.mediaItemCount == 0 || PlaybackQueueStore.activeQueueId() != queueId) {
+        // Rebuild the queue after a Shizuku read error too: the fallback has the same logical
+        // items but file:// URIs, so checking only the queue id would keep the failed source.
+        if (
+            activeController.mediaItemCount == 0 ||
+            PlaybackQueueStore.activeQueueId() != queueId ||
+            (shizukuFallbackAttempted && !preparation.usesShizukuDataSource)
+        ) {
             activeController.setMediaItems(mediaItems, startIndex, 0L)
             activeController.prepare()
             activeController.play()

@@ -48,6 +48,13 @@ class ShizukuReadAheadCache @Inject constructor() {
         readCached(path, position, length)?.let { return it }
 
         val blockOffset = position / BLOCK_SIZE_BYTES * BLOCK_SIZE_BYTES
+        // A single cache block cannot satisfy a request that crosses its end.  Media3 performs
+        // exactly these reads while parsing and buffering fragmented m4s streams; treating the
+        // cache miss as an I/O failure made otherwise intact videos stop after their first data
+        // block. Read this range directly instead of returning a partial block.
+        if (position - blockOffset + length > BLOCK_SIZE_BYTES) {
+            return loader(position, length)?.takeIf { it.isNotEmpty() }
+        }
         val requiredBytes = (position - blockOffset + length).coerceAtMost(MAX_BLOCK_LOAD_BYTES.toLong()).toInt()
         val loaded = loader(blockOffset, maxOf(BLOCK_SIZE_BYTES, requiredBytes)) ?: return null
         storeBlock(path, blockOffset, loaded)
