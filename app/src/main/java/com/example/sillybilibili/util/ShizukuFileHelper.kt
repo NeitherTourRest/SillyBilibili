@@ -728,21 +728,20 @@ class ShizukuFileHelper @Inject constructor(
         val destFile = File(dest)
         return try {
             FileOutputStream(destFile).use { out ->
-                val chunkSize = 524288L // 512KB per chunk, well under 1MB Binder limit
+                // Binder 单次传输上限约 1MB，readFileRange 自身限制 256KB；
+                // 直接随机读比 `dd bs=1 | base64` 快两到三个数量级（后者逐字节读）。
+                val chunkSize = 256L * 1024
                 var offset = 0L
                 while (offset < targetLen) {
                     val remaining = minOf(chunkSize, targetLen - offset)
-                    val base64 = execSh(
-                        "dd if='${escapeSingleQuote(src)}' bs=1 skip=$offset count=$remaining 2>/dev/null | base64",
-                        useShizuku
-                    ).replace("\\s".toRegex(), "")
-                    val decoded = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                    if (decoded.isEmpty()) {
+                    val chunk = readFileRange(src, offset, remaining.toInt(), useShizuku)
+                        ?: throw IllegalStateException("Empty chunk at offset $offset")
+                    if (chunk.isEmpty()) {
                         Log.w(TAG, "copyFileChunked: empty chunk at offset $offset, aborting")
                         throw IllegalStateException("Empty chunk at offset $offset")
                     }
-                    out.write(decoded)
-                    offset += remaining
+                    out.write(chunk)
+                    offset += chunk.size
                 }
             }
             val dstLen = destFile.length()

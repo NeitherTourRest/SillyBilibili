@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +57,11 @@ import com.example.sillybilibili.ui.theme.DarkTextSecondary
 import com.example.sillybilibili.ui.theme.DarkTextTertiary
 import com.example.sillybilibili.ui.theme.GlassHighlight
 import com.example.sillybilibili.ui.theme.NeonPurple
+import kotlinx.coroutines.delay
+
+/** 封面显示失败后的自动重试上限与基础间隔（文件可能正被 requestCover 重建）。 */
+internal const val MAX_COVER_DISPLAY_RETRIES = 6
+internal const val COVER_DISPLAY_RETRY_BASE_MS = 1200L
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -74,15 +80,25 @@ fun VideoCard(
     modifier: Modifier = Modifier
 ) {
     val accent = if (video.isVertical) NeonPurple else CyberVermilion
+    // 封面显示失败状态与重试计数提升到卡片级，便于上面的 LaunchedEffect 控制自动重试
+    var imageFailed by remember(video.id, video.displayCoverPath) { mutableStateOf(false) }
+    var coverRetryCount by remember(video.id, video.displayCoverPath) { mutableIntStateOf(0) }
     val animatedContainer by animateColorAsState(
         targetValue = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard,
         animationSpec = tween(durationMillis = 180),
         label = "videoCardContainer"
     )
-    LaunchedEffect(video.id, video.coverPath, video.coverSourcePath, video.exportedPath) {
+    LaunchedEffect(video.id, video.coverPath, video.coverSourcePath, video.exportedPath, imageFailed) {
         // Also re-check a stale cached path. CoverCacheService removes invalid cache files
-        // and restores the original cover or a video-frame fallback.
+        // and restores the original cover or a video-frame fallback. When the display fails
+        // (e.g. the cached file was wiped by the system), keep retrying with growing delays
+        // so a freshly rebuilt cover shows up without restarting the app.
         onCoverRequested(video)
+        if (imageFailed && coverRetryCount < MAX_COVER_DISPLAY_RETRIES) {
+            delay(COVER_DISPLAY_RETRY_BASE_MS * (coverRetryCount + 1))
+            coverRetryCount++
+            imageFailed = false
+        }
     }
     LaunchedEffect(video.id, video.onlineStatus, video.onlineCheckedAt) {
         onOnlineStatusRequested(video)
@@ -108,7 +124,7 @@ fun VideoCard(
             if (selectionMode) {
                 Checkbox(checked = selected, onCheckedChange = { onSelect() })
             }
-            VideoThumbnail(video = video, accent = accent)
+            VideoThumbnail(video = video, accent = accent, imageFailed = imageFailed, onImageFailed = { imageFailed = true })
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (video.ownerName.isNotBlank()) {
@@ -133,8 +149,12 @@ fun VideoCard(
 }
 
 @Composable
-private fun VideoThumbnail(video: Video, accent: Color) {
-    var imageFailed by remember(video.id, video.displayCoverPath) { mutableStateOf(false) }
+private fun VideoThumbnail(
+    video: Video,
+    accent: Color,
+    imageFailed: Boolean,
+    onImageFailed: () -> Unit
+) {
     Box(
         modifier = Modifier
             .width(if (video.isVertical) 84.dp else 132.dp)
@@ -149,7 +169,7 @@ private fun VideoThumbnail(video: Video, accent: Color) {
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                onError = { imageFailed = true }
+                onError = { onImageFailed() }
             )
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.42f)))))
         } ?: run {

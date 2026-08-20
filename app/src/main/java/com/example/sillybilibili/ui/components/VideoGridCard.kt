@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,6 +60,7 @@ import com.example.sillybilibili.ui.theme.DarkSurfaceVariant
 import com.example.sillybilibili.ui.theme.DarkTextPrimary
 import com.example.sillybilibili.ui.theme.DarkTextSecondary
 import com.example.sillybilibili.ui.theme.DarkTextTertiary
+import kotlinx.coroutines.delay
 
 /**
  * 宫格视图卡片：封面大图在上（16:9），标题与元信息在下，适合快速浏览封面。
@@ -79,6 +81,9 @@ fun VideoGridCard(
     modifier: Modifier = Modifier
 ) {
     val accent = if (video.isVertical) androidx.compose.ui.graphics.Color(0xFFB388FF) else CyberVermilion
+    // 封面显示失败状态与重试计数（文件可能正被 requestCover 重建，失败后自动重试）
+    var imageFailed by remember(video.id, video.displayCoverPath) { mutableStateOf(false) }
+    var coverRetryCount by remember(video.id, video.displayCoverPath) { mutableIntStateOf(0) }
     val animatedContainer by animateColorAsState(
         targetValue = if (selected) CyberVermilion.copy(alpha = 0.14f) else DarkCard,
         animationSpec = tween(durationMillis = 180),
@@ -94,8 +99,13 @@ fun VideoGridCard(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "gridCheckPop"
     )
-    LaunchedEffect(video.id, video.coverPath, video.coverSourcePath, video.exportedPath) {
+    LaunchedEffect(video.id, video.coverPath, video.coverSourcePath, video.exportedPath, imageFailed) {
         onCoverRequested(video)
+        if (imageFailed && coverRetryCount < MAX_COVER_DISPLAY_RETRIES) {
+            delay(COVER_DISPLAY_RETRY_BASE_MS * (coverRetryCount + 1))
+            coverRetryCount++
+            imageFailed = false
+        }
     }
     LaunchedEffect(video.id, video.onlineStatus, video.onlineCheckedAt) {
         onOnlineStatusRequested(video)
@@ -114,7 +124,6 @@ fun VideoGridCard(
         border = if (selectionMode) BorderStroke(1.5.dp, animatedBorder) else null
     ) {
         Column {
-            var imageFailed by remember(video.id, video.displayCoverPath) { mutableStateOf(false) }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
