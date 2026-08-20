@@ -38,6 +38,9 @@ fun AppTopBar(
     title: String,
     subtitle: String? = null,
     onNavigateBack: (() -> Unit)? = null,
+    /** 自定义标题内容（如 logo + 应用名），优先于 title/subtitle。必须放在 actions 之前，
+     *  否则 trailing lambda 会绑定到它而不是 actions。 */
+    titleContent: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     Column(
@@ -47,12 +50,16 @@ fun AppTopBar(
     ) {
         TopAppBar(
             title = {
+                if (titleContent != null) {
+                    titleContent()
+                } else {
                 Column(verticalArrangement = Arrangement.Center) {
                     Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     subtitle?.let {
                         Spacer(Modifier.height(1.dp))
                         Text(it, style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
                     }
+                }
                 }
             },
             navigationIcon = {

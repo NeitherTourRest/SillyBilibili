@@ -66,6 +66,8 @@ data class HomeUiState(
     val hasMoreData: Boolean = true, val isScanning: Boolean = false,
     val scanProgress: VideoScanService.ScanProgress? = null, val errorMessage: String? = null,
     val isSelectionMode: Boolean = false, val selectedIds: Set<Long> = emptySet(),
+    /** 最近一次翻页方向：1 = 下一页（滚回页首），-1 = 上一页（滚到页尾）。 */
+    val pageDirection: Int = 1,
     /** 首页宫格视图开关（false = 列表视图）。 */
     val gridViewEnabled: Boolean = false,
     /** 批量操作实时进度（转换/刷新状态/完整性检查）。 */
@@ -151,6 +153,14 @@ class HomeViewModel @Inject constructor(
 
     /** 可注入的时间源（测试中用于推进限频重试间隔）。 */
     internal var coverClock: () -> Long = System::currentTimeMillis
+
+    /** 后退翻页后短暂抑制自动前进翻页：定位到页尾会让 lastVisibleIndex 越过阈值，
+     *  不抑制会立刻又翻回下一页。仅影响自动前进，不拦截手势触发的后退切页。 */
+    private var lastBackwardSwitchAt = Long.MIN_VALUE
+    private val pageSwitchSuppressMs = 800L
+
+    private fun suppressAutoAdvance(): Boolean =
+        lastBackwardSwitchAt != Long.MIN_VALUE && coverClock() - lastBackwardSwitchAt < pageSwitchSuppressMs
 
     /** 批量转换队列：一次只跑一个，前一个结束后自动启动下一个。 */
     private val conversionQueue = ArrayDeque<Video>()
@@ -302,6 +312,8 @@ class HomeViewModel @Inject constructor(
     fun loadMore() {
         val state = _uiState.value
         if (state.isLoadingMore || state.isLoading || !state.hasMoreData) return
+        // 刚后退翻页时滚动定位停在页尾，短暂抑制自动前进翻页
+        if (suppressAutoAdvance()) return
         val page = state.currentPage + 1
         val epoch = pagingEpoch
         val key = currentLoadKey()
@@ -317,12 +329,39 @@ class HomeViewModel @Inject constructor(
                     videos = videos,
                     currentPage = page,
                     isLoadingMore = false,
-                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE
+                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE,
+                    pageDirection = 1
                 )
             }
             if (videos.size == HomeUiState.PAGE_SIZE) {
                 prefetchPage(page + 1, epoch, key, fs)
             }
+        }
+    }
+
+    /**
+     * 上滑切页：回到上一页（替换当前页），UI 负责滚动到页尾。
+     */
+    fun goToPreviousPage() {
+        val state = _uiState.value
+        if (state.currentPage <= 0 || state.isLoading || state.isLoadingMore) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMore = true) }
+            val page = state.currentPage - 1
+            val key = currentLoadKey()
+            val fs = _filterSnapshot.value
+            val videos = loadPage(key.categoryId, key.query, fs, page)
+            if (_uiState.value.currentPage - 1 != page) return@launch
+            _uiState.update {
+                it.copy(
+                    videos = videos,
+                    currentPage = page,
+                    isLoadingMore = false,
+                    hasMoreData = videos.size == HomeUiState.PAGE_SIZE,
+                    pageDirection = -1
+                )
+            }
+            lastBackwardSwitchAt = coverClock()
         }
     }
 

@@ -401,6 +401,67 @@ class HomeViewModelTest {
         viewModel.exitSelectionMode()
         assertFalse(viewModel.uiState.value.isSelectionMode)
     }
+    @Test
+    fun `goToPreviousPage is ignored on the first page`() = runTest {
+        advanceUntilIdle()
+        viewModel.goToPreviousPage()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.currentPage)
+    }
+
+    @Test
+    fun `goToPreviousPage loads the previous page and marks backward direction`() = runTest {
+        val firstPage = List(HomeUiState.PAGE_SIZE) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "P0-$index", path = "/v/$index", audioPath = "/a/$index", size = 1, duration = 1)
+        }
+        val secondPage = List(HomeUiState.PAGE_SIZE) { index ->
+            Video(id = 100L + index, avid = 100L + index, cid = 1, title = "P1-$index", path = "/v2/$index", audioPath = "/a2/$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(0), any()) } returns firstPage
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(1), any()) } returns secondPage
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.currentPage)
+
+        viewModel.goToPreviousPage()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.currentPage)
+        assertEquals(firstPage, viewModel.uiState.value.videos)
+        assertEquals(-1, viewModel.uiState.value.pageDirection)
+    }
+    @Test
+    fun `loadMore is suppressed right after going back a page and works after the window`() = runTest {
+        var fakeNow = 1_000_000L
+        viewModel.coverClock = { fakeNow }
+        val firstPage = List(HomeUiState.PAGE_SIZE) { index ->
+            Video(id = index.toLong() + 1, avid = index.toLong(), cid = 1, title = "P0-$index", path = "/v/$index", audioPath = "/a/$index", size = 1, duration = 1)
+        }
+        val secondPage = List(HomeUiState.PAGE_SIZE) { index ->
+            Video(id = 100L + index, avid = 100L + index, cid = 1, title = "P1-$index", path = "/v2/$index", audioPath = "/a2/$index", size = 1, duration = 1)
+        }
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(0), any()) } returns firstPage
+        coEvery { videoRepository.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(1), any()) } returns secondPage
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.currentPage)
+
+        viewModel.goToPreviousPage()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.currentPage)
+
+        // 防抖窗口内 loadMore 被抑制（否则后退翻页定位到页尾会立刻又前进）
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.currentPage)
+
+        // 窗口过后恢复正常
+        fakeNow += 1_000
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.currentPage)
+    }
 }
 
 class StandardTestDispatcherRule : TestWatcher() {
