@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,12 +68,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -129,6 +135,7 @@ fun PlayerPage(
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     val queue = remember(queueId) { PlaybackQueueStore.queueFor(queueId) }
     val preparation by viewModel.state.collectAsState()
     val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsState()
@@ -163,6 +170,47 @@ fun PlayerPage(
     var isSettlingFullscreenSwipe by remember { mutableStateOf(false) }
     var swipeWarmupIndex by remember { mutableIntStateOf(-1) }
     var settledSwipePreviewIndex by remember { mutableIntStateOf(-1) }
+    val playerDetailsListState = rememberLazyListState()
+    var nonFullscreenViewportWidthPx by remember { mutableIntStateOf(0) }
+    var portraitViewportHeightPx by remember { mutableIntStateOf(0) }
+    val portraitViewportHeights = portraitViewportHeightsPx(nonFullscreenViewportWidthPx, videoAspectRatio)
+
+    // A new portrait source starts in its taller theatre presentation. The height is then driven
+    // directly by nested-scroll distance instead of jumping between two aspect ratios.
+    LaunchedEffect(portraitViewportHeights, isFullscreen) {
+        if (!isFullscreen) {
+            portraitViewportHeightPx = portraitViewportHeights?.expandedHeightPx ?: 0
+        }
+    }
+    val portraitCollapseConnection = remember(portraitViewportHeights, isFullscreen, playerDetailsListState) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (isFullscreen) return Offset.Zero
+                val heights = portraitViewportHeights ?: return Offset.Zero
+                val currentHeight = portraitViewportHeightPx
+                    .takeIf { it > 0 }
+                    ?.coerceIn(heights.collapsedHeightPx, heights.expandedHeightPx)
+                    ?: heights.expandedHeightPx
+
+                // Swipe upward toward the detail list: collapse the portrait theatre first.
+                if (available.y < 0f && currentHeight > heights.collapsedHeightPx) {
+                    val consumed = minOf(-available.y, (currentHeight - heights.collapsedHeightPx).toFloat())
+                    portraitViewportHeightPx = (currentHeight - consumed).roundToInt()
+                    return Offset(0f, -consumed)
+                }
+
+                // Swipe downward only expands after the detail list has returned to its top.
+                val detailsAtTop = playerDetailsListState.firstVisibleItemIndex == 0 &&
+                    playerDetailsListState.firstVisibleItemScrollOffset == 0
+                if (available.y > 0f && detailsAtTop && currentHeight < heights.expandedHeightPx) {
+                    val consumed = minOf(available.y, (heights.expandedHeightPx - currentHeight).toFloat())
+                    portraitViewportHeightPx = (currentHeight + consumed).roundToInt()
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     DisposableEffect(controllerFuture) {
         controllerFuture.addListener(
@@ -387,10 +435,23 @@ fun PlayerPage(
         settledTargetIndex = settledSwipePreviewIndex.takeIf { it >= 0 }
     )
 
-    Column(Modifier.fillMaxSize().background(DarkBackground)) {
+    val viewportModifier = when {
+        isFullscreen -> Modifier.fillMaxSize()
+        portraitViewportHeights != null && portraitViewportHeightPx > 0 -> {
+            Modifier.fillMaxWidth().height(with(density) { portraitViewportHeightPx.toDp() })
+        }
+        else -> Modifier.fillMaxWidth().aspectRatio(nonFullscreenViewportAspectRatio(videoAspectRatio))
+    }
+
+    Column(Modifier.fillMaxSize().background(DarkBackground).nestedScroll(portraitCollapseConnection)) {
     Box(
-        (if (isFullscreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(nonFullscreenViewportAspectRatio(videoAspectRatio)))
-            .onSizeChanged { size -> fullscreenViewportHeightPx = size.height }
+        viewportModifier
+            .onSizeChanged { size ->
+                fullscreenViewportHeightPx = size.height
+                if (!isFullscreen && nonFullscreenViewportWidthPx != size.width) {
+                    nonFullscreenViewportWidthPx = size.width
+                }
+            }
             .background(Color.Black)
     ) {
         if (isFullscreen && swipePreviewIndex != null && fullscreenViewportHeightPx > 0) {
@@ -536,7 +597,10 @@ fun PlayerPage(
         }
     }
     }
-        if (!isFullscreen) LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        if (!isFullscreen) LazyColumn(
+            state = playerDetailsListState,
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
             item {
                 PlayerSummaryHeader(
                     title = controller?.mediaMetadata?.title?.toString().orEmpty().ifBlank { queue?.items?.getOrNull(activeIndex)?.title.orEmpty() },
@@ -784,6 +848,25 @@ internal fun nonFullscreenViewportAspectRatio(videoAspectRatio: Float): Float = 
     videoAspectRatio < 1f -> (videoAspectRatio / 0.82f).coerceIn(0.66f, 0.96f)
     videoAspectRatio <= 1.08f -> 1f
     else -> DEFAULT_PLAYER_VIEWPORT_ASPECT_RATIO
+}
+
+internal data class PortraitViewportHeights(
+    val expandedHeightPx: Int,
+    val collapsedHeightPx: Int
+)
+
+/** Height bounds for the non-fullscreen portrait theatre and its compact 16:9 reading state. */
+internal fun portraitViewportHeightsPx(
+    contentWidthPx: Int,
+    videoAspectRatio: Float
+): PortraitViewportHeights? {
+    if (contentWidthPx <= 0 || videoAspectRatio !in 0.1f..<1f) return null
+    val expanded = (contentWidthPx / nonFullscreenViewportAspectRatio(videoAspectRatio)).roundToInt()
+    val collapsed = (contentWidthPx / DEFAULT_PLAYER_VIEWPORT_ASPECT_RATIO).roundToInt()
+    return PortraitViewportHeights(
+        expandedHeightPx = maxOf(expanded, collapsed),
+        collapsedHeightPx = minOf(expanded, collapsed)
+    )
 }
 
 /** Returns the adjacent queue entry represented by a live full-screen drag. */
