@@ -276,9 +276,9 @@ fun HomePage(
                         columns = GridCells.Fixed(2),
                         state = gridState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         gridItems(uiState.videos, key = { it.id }, contentType = { "video-grid" }) { video ->
                             VideoGridCard(
@@ -299,8 +299,8 @@ fun HomePage(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
                             VideoCard(
@@ -382,5 +382,4 @@ private fun EmptyVideoLibrary(onScan: () -> Unit) {
         }
     )
 }
-
 

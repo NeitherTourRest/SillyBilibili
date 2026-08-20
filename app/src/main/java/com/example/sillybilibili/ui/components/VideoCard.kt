@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -109,24 +110,24 @@ fun VideoCard(
             onClick = if (selectionMode) onSelect else onClick,
             onLongClick = if (selectionMode) onSelect else onLongClick
         ),
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = animatedContainer
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
-        border = CardDefaults.outlinedCardBorder(enabled = true).copy(brush = Brush.linearGradient(listOf(GlassHighlight, accent.copy(alpha = 0.52f), DarkDivider)))
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        border = CardDefaults.outlinedCardBorder(enabled = true).copy(brush = Brush.linearGradient(listOf(DarkDivider, accent.copy(alpha = 0.22f), DarkDivider)))
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.fillMaxWidth().height(110.dp).padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (selectionMode) {
                 Checkbox(checked = selected, onCheckedChange = { onSelect() })
             }
             VideoThumbnail(video = video, accent = accent, imageFailed = imageFailed, onImageFailed = { imageFailed = true })
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     if (video.ownerName.isNotBlank()) {
                         Text(video.ownerName, style = MaterialTheme.typography.labelMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -135,8 +136,8 @@ fun VideoCard(
                         Text(video.resolutionLabel, style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
                     }
                 }
-                Text(video.title, style = MaterialTheme.typography.titleSmall, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(video.title, style = MaterialTheme.typography.bodyMedium, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     // 时长已移到缩略图角标，这里保留分类、大小与在线状态
                     category?.let { CategoryBadge(it) }
                     if (video.duration <= 0L) VideoMeta(video.formattedDuration)
@@ -157,9 +158,9 @@ private fun VideoThumbnail(
 ) {
     Box(
         modifier = Modifier
-            .width(if (video.isVertical) 84.dp else 132.dp)
-            .aspectRatio(video.previewAspectRatio)
-            .clip(RoundedCornerShape(14.dp))
+            .width(130.dp)
+            .height(90.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(DarkSurfaceVariant),
         contentAlignment = Alignment.Center
     ) {
@@ -177,20 +178,20 @@ private fun VideoThumbnail(
         }
         // 画质角标：右上角
         if (video.quality.isNotBlank()) {
-            Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(7.dp), color = Color.Black.copy(alpha = 0.62f)) {
-                Text(video.quality, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+            Surface(modifier = Modifier.align(Alignment.TopEnd).padding(5.dp), shape = RoundedCornerShape(6.dp), color = Color.Black.copy(alpha = 0.62f)) {
+                Text(video.quality, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
         // 时长角标：右下角，现代视频列表的通用做法
         if (video.duration > 0L) {
             Surface(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
-                shape = RoundedCornerShape(7.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(5.dp),
+                shape = RoundedCornerShape(6.dp),
                 color = Color.Black.copy(alpha = 0.72f)
             ) {
                 Text(
                     video.formattedDuration,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold
@@ -203,9 +204,9 @@ private fun VideoThumbnail(
 @Composable
 private fun CategoryBadge(category: Category) {
     val color = Color(category.color)
-    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.14f)) {
+    Surface(shape = RoundedCornerShape(7.dp), color = color.copy(alpha = 0.14f)) {
         Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -222,8 +223,8 @@ private fun CategoryBadge(category: Category) {
 
 @Composable
 private fun VideoMeta(label: String) {
-    Surface(shape = RoundedCornerShape(8.dp), color = DarkSurfaceVariant) {
-        Text(label, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
+    Surface(shape = RoundedCornerShape(7.dp), color = DarkSurfaceVariant) {
+        Text(label, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
     }
 }
 
@@ -237,11 +238,11 @@ fun OnlineStatusBadge(status: OnlineVideoStatus, modifier: Modifier = Modifier) 
     }
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(7.dp),
         color = color.copy(alpha = 0.14f),
         border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.36f))
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = color)
+        Text(label, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

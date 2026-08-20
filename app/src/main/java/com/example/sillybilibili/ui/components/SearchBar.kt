@@ -1,6 +1,7 @@
 package com.example.sillybilibili.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,7 +18,7 @@ import com.example.sillybilibili.ui.theme.*
 
 /**
  * 胶囊形搜索栏：无边框填充风格，聚焦时描边高亮为主色。
- * 保持单行高度（48dp），不再展开 supportingText，列表页头部更紧凑。
+ * 保持单行高度（46dp），不再展开 supportingText，列表页头部更紧凑。
  */
 @Composable
 fun SearchBar(
@@ -30,7 +31,7 @@ fun SearchBar(
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).height(46.dp).onFocusChanged { focused = it.isFocused },
         placeholder = { Text(placeholder, color = DarkTextTertiary, maxLines = 1) },
         leadingIcon = {
             Icon(
@@ -47,7 +48,7 @@ fun SearchBar(
             }
         },
         singleLine = true,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(18.dp),
         textStyle = LocalTextStyle.current.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = CyberVermilion.copy(alpha = 0.7f),

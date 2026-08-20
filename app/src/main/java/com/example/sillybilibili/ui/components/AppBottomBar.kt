@@ -11,6 +11,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.sillybilibili.ui.theme.CyberVermilion
 import com.example.sillybilibili.ui.theme.DarkCard
@@ -28,7 +31,7 @@ val bottomTabs = listOf(
 
 @Composable
 fun AppBottomBar(currentRoute: String?, onNavigate: (String) -> Unit) {
-    NavigationBar(containerColor = DarkCard) {
+    NavigationBar(modifier = Modifier.height(72.dp), containerColor = DarkCard) {
         bottomTabs.forEach { tab ->
             NavigationBarItem(
                 selected = currentRoute == tab.route,

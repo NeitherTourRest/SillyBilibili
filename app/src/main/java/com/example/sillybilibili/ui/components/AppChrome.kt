@@ -48,13 +48,13 @@ fun AppTopBar(
     ) {
         TopAppBar(
             // 紧凑高度：避免状态栏下方再留一大段空白
-            modifier = Modifier.height(56.dp),
+            modifier = Modifier.height(52.dp),
             title = {
                 if (titleContent != null) {
                     titleContent()
                 } else {
                 Column(verticalArrangement = Arrangement.Center) {
-                    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     subtitle?.let {
                         Spacer(Modifier.height(1.dp))
                         Text(it, style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
