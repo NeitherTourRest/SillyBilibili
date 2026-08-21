@@ -3,6 +3,11 @@ package com.example.sillybilibili.ui.pages.scan
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +29,8 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timer
@@ -49,6 +56,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -210,6 +220,7 @@ private fun AccessAndPathCard(state: ScanUiState, viewModel: ScanViewModel, onPi
 
 @Composable
 private fun ScanFilters(state: ScanUiState, viewModel: ScanViewModel) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = DarkCard)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,32 +232,51 @@ private fun ScanFilters(state: ScanUiState, viewModel: ScanViewModel) {
                 if (state.activeFilterCount > 0) {
                     TextButton(onClick = viewModel::clearFilters) { Text("清除 ${state.activeFilterCount} 项") }
                 }
-            }
-            FilterRow("画质", listOf(null to "全部", "360P" to "360P", "480P" to "480P", "720P" to "720P", "1080P" to "1080P", "4K" to "4K"), state.filterQuality) { viewModel.updateFilterQuality(it) }
-            OrientationFilter(state.filterOrientation, viewModel::updateFilterOrientation)
-            DurationFilter(state.filterDurationPreset, viewModel::updateDurationPreset)
-            if (state.filterDurationPreset == ScanDurationPreset.CUSTOM) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(state.filterMinDurationSec, viewModel::updateFilterMinDuration, Modifier.weight(1f), singleLine = true, label = { Text("最短秒数") }, colors = scanFieldColors())
-                    OutlinedTextField(state.filterMaxDurationSec, viewModel::updateFilterMaxDuration, Modifier.weight(1f), singleLine = true, label = { Text("最长秒数") }, colors = scanFieldColors())
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "收起" else if (state.activeFilterCount > 0) "${state.activeFilterCount} 项筛选" else "展开")
+                    Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(18.dp))
                 }
             }
-            PresetFilter("大小", ScanSizePreset.values().toList(), state.filterSizePreset, viewModel::updateSizePreset)
-            OutlinedTextField(
-                value = state.filterSpecificAvIds,
-                onValueChange = viewModel::updateFilterSpecificAvIds,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("指定 AV 号（可选，逗号分隔）") },
-                supportingText = { Text("只扫描输入的缓存包；留空则扫描全部") },
-                colors = scanFieldColors()
-            )
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text("快速扫描", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                    Text("只读取元数据，跳过文件完整性检查", style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
+            if (!expanded) {
+                Text(
+                    if (state.activeFilterCount > 0) "扫描将仅处理符合当前条件的缓存包。" else "可按画质、方向、时长、大小或 AV 号缩小扫描范围。",
+                    color = DarkTextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    FilterRow("画质", listOf(null to "全部", "360P" to "360P", "480P" to "480P", "720P" to "720P", "1080P" to "1080P", "4K" to "4K"), state.filterQuality) { viewModel.updateFilterQuality(it) }
+                    OrientationFilter(state.filterOrientation, viewModel::updateFilterOrientation)
+                    DurationFilter(state.filterDurationPreset, viewModel::updateDurationPreset)
+                    if (state.filterDurationPreset == ScanDurationPreset.CUSTOM) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(state.filterMinDurationSec, viewModel::updateFilterMinDuration, Modifier.weight(1f), singleLine = true, label = { Text("最短秒数") }, colors = scanFieldColors())
+                            OutlinedTextField(state.filterMaxDurationSec, viewModel::updateFilterMaxDuration, Modifier.weight(1f), singleLine = true, label = { Text("最长秒数") }, colors = scanFieldColors())
+                        }
+                    }
+                    PresetFilter("大小", ScanSizePreset.values().toList(), state.filterSizePreset, viewModel::updateSizePreset)
+                    OutlinedTextField(
+                        value = state.filterSpecificAvIds,
+                        onValueChange = viewModel::updateFilterSpecificAvIds,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("指定 AV 号（可选，逗号分隔）") },
+                        supportingText = { Text("只扫描输入的缓存包；留空则扫描全部") },
+                        colors = scanFieldColors()
+                    )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text("快速扫描", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Text("只读取元数据，跳过文件完整性检查", style = MaterialTheme.typography.bodySmall, color = DarkTextSecondary)
+                        }
+                        Switch(state.filterQuickMode, onCheckedChange = { viewModel.toggleQuickMode() }, colors = SwitchDefaults.colors(checkedThumbColor = CyberVermilion, checkedTrackColor = CyberVermilion.copy(alpha = .4f)))
+                    }
                 }
-                Switch(state.filterQuickMode, onCheckedChange = { viewModel.toggleQuickMode() }, colors = SwitchDefaults.colors(checkedThumbColor = CyberVermilion, checkedTrackColor = CyberVermilion.copy(alpha = .4f)))
             }
         }
     }
