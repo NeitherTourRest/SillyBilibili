@@ -1,6 +1,7 @@
 package com.example.sillybilibili.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sillybilibili.domain.model.Category
@@ -22,18 +22,21 @@ import com.example.sillybilibili.ui.theme.*
 @Composable
 fun CategoryCard(category: Category, onClick: () -> Unit, onEditClick: () -> Unit, onDeleteClick: () -> Unit, modifier: Modifier = Modifier) {
     val catColor = Color(category.color)
-    Card(modifier = modifier.fillMaxWidth().clickable(onClick = onClick), shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = DarkCard), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(GlassHighlight, catColor.copy(alpha = 0.52f), DarkDivider)))
+    Card(
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        border = BorderStroke(1.dp, DarkDivider.copy(alpha = 0.58f))
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(catColor.copy(alpha = 0.16f)),
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(catColor.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(category.name.take(1), style = MaterialTheme.typography.titleMedium, color = catColor, fontWeight = FontWeight.Bold)
             }
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(category.name, style = MaterialTheme.typography.titleMedium, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold)
                 Text("${category.videoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
             }
