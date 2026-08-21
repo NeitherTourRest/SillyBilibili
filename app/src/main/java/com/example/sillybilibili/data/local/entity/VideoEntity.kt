@@ -38,7 +38,11 @@ import androidx.room.PrimaryKey
     ],
     indices = [
         Index("categoryId"),               // 加速 SELECT WHERE categoryId = ?
-        Index(value = ["path"], unique = true)  // 路径唯一，防止同一视频重复扫描
+        Index(value = ["path"], unique = true),  // 路径唯一，防止同一视频重复扫描
+        // 首页与分类列表的共同前缀：只显示仍可用的源缓存，并按最近入库时间分页。
+        Index(value = ["sourceAvailable", "addedAt"], name = "index_videos_source_available_added_at"),
+        // 分类筛选将 categoryId 放在同一个覆盖索引中，避免大库先扫全部可用缓存再过滤分类。
+        Index(value = ["sourceAvailable", "categoryId", "addedAt"], name = "index_videos_source_available_category_added_at")
     ]
 )
 data class VideoEntity(

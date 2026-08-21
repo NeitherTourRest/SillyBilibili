@@ -66,10 +66,27 @@ object DatabaseModule {
         }
     }
 
+    /** Makes the source-available home and category feeds scale without changing stored data. */
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_videos_source_available_added_at " +
+                    "ON videos(sourceAvailable, addedAt)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_videos_source_available_category_added_at " +
+                    "ON videos(sourceAvailable, categoryId, addedAt)"
+            )
+        }
+    }
+
     @Provides @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "silly_bilibili.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .addMigrations(
+                MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9
+            )
             .build()
 
     @Provides @Singleton

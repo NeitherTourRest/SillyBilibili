@@ -3,7 +3,7 @@
 // ============================================================
 // Room 是 Android 官方的 SQLite 数据库框架。
 // 这个类定义了数据库的"骨架"：有哪些表、当前版本号是多少。
-// version = 8 adds the video publish date (pubdate) column.
+// version = 9 adds indexes for large-library browsing queries.
 // 实际建库和迁移逻辑在 DatabaseModule.kt。
 // 被 DatabaseModule.kt 调用 → 全局单例。
 // ============================================================
@@ -25,7 +25,7 @@ import com.example.sillybilibili.data.local.entity.VideoEntity
 // version = 数据库版本号（升级时写迁移逻辑，见 DatabaseModule.kt）
 @Database(
     entities = [CategoryEntity::class, VideoEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = false  // 不导出 Schema 文件（开发调试用）
 )
 abstract class AppDatabase : RoomDatabase() {
