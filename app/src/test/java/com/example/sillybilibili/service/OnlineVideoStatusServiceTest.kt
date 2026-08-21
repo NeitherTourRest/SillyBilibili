@@ -36,6 +36,27 @@ class OnlineVideoStatusServiceTest {
         coVerify(exactly = 3) { repository.updateVideo(any()) }
     }
 
+    @Test
+    fun `manual refresh reports AV based progress from start through completion`() = runTest {
+        val repository = mockk<VideoRepository>(relaxed = true)
+        val remote = mockk<OnlineVideoStatusRemoteDataSource>()
+        val firstPart = video(id = 1, avid = 100, cid = 11)
+        val secondPart = video(id = 2, avid = 100, cid = 12)
+        val unavailable = video(id = 3, avid = 200, cid = 21)
+        every { repository.getAllVideos() } returns flowOf(listOf(firstPart, secondPart, unavailable))
+        coEvery { remote.fetchStatus(100) } returns OnlineVideoStatus.ONLINE
+        coEvery { remote.fetchStatus(200) } returns OnlineVideoStatus.UNAVAILABLE
+        val progress = mutableListOf<OnlineStatusRefreshProgress>()
+
+        OnlineVideoStatusService(repository, remote).forceRefreshAll { progress += it }
+
+        assertEquals(listOf(0, 1, 2), progress.map { it.completedRequestCount })
+        assertEquals(listOf(2, 2, 2), progress.map { it.totalRequestCount })
+        assertEquals(2, progress.last().onlineCount)
+        assertEquals(1, progress.last().unavailableCount)
+        assertEquals(3, progress.last().processedVideoCount)
+    }
+
     private fun video(id: Long, avid: Long, cid: Long) = Video(
         id = id,
         avid = avid,

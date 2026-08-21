@@ -14,6 +14,7 @@
     <string name="online_status_refresh_description">Immediately recheck every scanned cache. Multiple parts of the same video use one request.</string>
     <string name="online_status_refresh_action">Refresh all statuses</string>
     <string name="online_status_refreshing">Refreshing…</string>
+    <string name="online_status_refresh_progress">Completed %1$d / %2$d video requests; updated %3$d / %4$d cached entries</string>
     <string name="online_status_refresh_result">Checked %1$d caches in %2$d requests: %3$d online, %4$d unavailable, %5$d unverifiable.</string>
     <string name="back">Back</string>
     <string name="home_subtitle">Local cached video library</string>

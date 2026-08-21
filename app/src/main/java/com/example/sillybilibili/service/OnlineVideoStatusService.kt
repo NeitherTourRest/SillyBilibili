@@ -4,8 +4,13 @@ import com.example.sillybilibili.domain.model.OnlineVideoStatus
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.net.HttpURLConnection
@@ -26,6 +31,24 @@ data class OnlineStatusRefreshResult(
     val unavailableCount: Int,
     val unverifiableCount: Int
 )
+
+/**
+ * UI-safe snapshot emitted while an explicit full-library online-status refresh is running.
+ * Progress is measured in distinct AV requests rather than cache entries because a multi-part
+ * video maps to one remote request.
+ */
+data class OnlineStatusRefreshProgress(
+    val videoCount: Int,
+    val totalRequestCount: Int,
+    val completedRequestCount: Int,
+    val processedVideoCount: Int,
+    val onlineCount: Int,
+    val unavailableCount: Int,
+    val unverifiableCount: Int
+) {
+    val fraction: Float
+        get() = if (totalRequestCount == 0) 1f else completedRequestCount.toFloat() / totalRequestCount
+}
 
 @Singleton
 class BilibiliOnlineVideoStatusRemoteDataSource @Inject constructor() : OnlineVideoStatusRemoteDataSource {
@@ -122,27 +145,67 @@ class OnlineVideoStatusService @Inject constructor(
      * Explicit user-triggered refresh. Unlike [checkIfNeeded], this deliberately ignores the
      * normal cache window and groups split episodes under the same AV into one request.
      */
-    suspend fun forceRefreshAll(): OnlineStatusRefreshResult {
+    suspend fun forceRefreshAll(
+        onProgress: suspend (OnlineStatusRefreshProgress) -> Unit = {}
+    ): OnlineStatusRefreshResult {
         val scannedVideos = videoRepository.getAllVideos().first().filter { it.sourceAvailable }
-        if (scannedVideos.isEmpty()) return OnlineStatusRefreshResult(0, 0, 0, 0, 0)
+        if (scannedVideos.isEmpty()) {
+            onProgress(OnlineStatusRefreshProgress(0, 0, 0, 0, 0, 0, 0))
+            return OnlineStatusRefreshResult(0, 0, 0, 0, 0)
+        }
 
         var onlineCount = 0
         var unavailableCount = 0
         var unverifiableCount = 0
+        var processedVideoCount = 0
+        var completedRequestCount = 0
         val checkedAt = System.currentTimeMillis()
         val groups = scannedVideos.groupBy { it.avid }
 
-        groups.values.forEach { videosWithSameAv ->
-            val result = remoteDataSource.fetchStatus(videosWithSameAv.first().avid)
-            when (result) {
-                OnlineVideoStatus.ONLINE -> onlineCount += videosWithSameAv.size
-                OnlineVideoStatus.UNAVAILABLE -> unavailableCount += videosWithSameAv.size
-                OnlineVideoStatus.UNVERIFIABLE, OnlineVideoStatus.UNCHECKED -> unverifiableCount += videosWithSameAv.size
+        suspend fun publishProgress() {
+            onProgress(
+                OnlineStatusRefreshProgress(
+                    videoCount = scannedVideos.size,
+                    totalRequestCount = groups.size,
+                    completedRequestCount = completedRequestCount,
+                    processedVideoCount = processedVideoCount,
+                    onlineCount = onlineCount,
+                    unavailableCount = unavailableCount,
+                    unverifiableCount = unverifiableCount
+                )
+            )
+        }
+
+        publishProgress()
+        val results = Channel<Pair<List<Video>, OnlineVideoStatus>>(Channel.UNLIMITED)
+        val requestSemaphore = Semaphore(MAX_CONCURRENT_REFRESH_REQUESTS)
+        coroutineScope {
+            groups.values.forEach { videosWithSameAv ->
+                launch {
+                    val status = requestSemaphore.withPermit {
+                        runCatching { remoteDataSource.fetchStatus(videosWithSameAv.first().avid) }
+                            .getOrDefault(OnlineVideoStatus.UNVERIFIABLE)
+                    }
+                    results.send(videosWithSameAv to status)
+                }
             }
-            videosWithSameAv.forEach { video ->
-                videoRepository.updateVideo(video.copy(onlineStatus = result, onlineCheckedAt = checkedAt))
+
+            repeat(groups.size) {
+                val (videosWithSameAv, result) = results.receive()
+                when (result) {
+                    OnlineVideoStatus.ONLINE -> onlineCount += videosWithSameAv.size
+                    OnlineVideoStatus.UNAVAILABLE -> unavailableCount += videosWithSameAv.size
+                    OnlineVideoStatus.UNVERIFIABLE, OnlineVideoStatus.UNCHECKED -> unverifiableCount += videosWithSameAv.size
+                }
+                videosWithSameAv.forEach { video ->
+                    videoRepository.updateVideo(video.copy(onlineStatus = result, onlineCheckedAt = checkedAt))
+                }
+                completedRequestCount++
+                processedVideoCount += videosWithSameAv.size
+                publishProgress()
             }
         }
+        results.close()
         return OnlineStatusRefreshResult(
             videoCount = scannedVideos.size,
             requestCount = groups.size,
@@ -159,6 +222,8 @@ class OnlineVideoStatusService @Inject constructor(
     }
 
     private companion object {
+        /** Keep bulk refresh responsive without creating a request burst against the remote API. */
+        const val MAX_CONCURRENT_REFRESH_REQUESTS = 3
         const val RETRY_AFTER_FAILURE_MS = 15 * 60 * 1_000L
         const val RECHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000L
     }

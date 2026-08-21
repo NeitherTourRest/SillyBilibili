@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -114,6 +115,25 @@ fun SettingsPage(
                         } else {
                             Text(stringResource(R.string.online_status_refresh_action))
                         }
+                    }
+                    uiState.onlineStatusRefreshProgress?.takeIf { uiState.isRefreshingOnlineStatuses }?.let { progress ->
+                        LinearProgressIndicator(
+                            progress = progress.fraction,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = NeonCyan,
+                            trackColor = DarkSurfaceVariant
+                        )
+                        Text(
+                            stringResource(
+                                R.string.online_status_refresh_progress,
+                                progress.completedRequestCount,
+                                progress.totalRequestCount,
+                                progress.processedVideoCount,
+                                progress.videoCount
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DarkTextSecondary
+                        )
                     }
                     uiState.onlineStatusRefreshResult?.let { result ->
                         Text(

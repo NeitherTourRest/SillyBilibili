@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sillybilibili.service.OnlineStatusRefreshResult
+import com.example.sillybilibili.service.OnlineStatusRefreshProgress
 import com.example.sillybilibili.service.OnlineVideoStatusService
 import com.example.sillybilibili.service.SettingsService
 import com.example.sillybilibili.service.VideoConverterService
@@ -21,6 +22,7 @@ data class SettingsUiState(
     val backgroundPlaybackEnabled: Boolean = true,
     val appLanguage: SettingsService.AppLanguage = SettingsService.AppLanguage.SIMPLIFIED_CHINESE,
     val isRefreshingOnlineStatuses: Boolean = false,
+    val onlineStatusRefreshProgress: OnlineStatusRefreshProgress? = null,
     val onlineStatusRefreshResult: OnlineStatusRefreshResult? = null
 )
 
@@ -60,9 +62,22 @@ class SettingsViewModel @Inject constructor(
     fun refreshOnlineStatuses() {
         if (_uiState.value.isRefreshingOnlineStatuses) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshingOnlineStatuses = true, onlineStatusRefreshResult = null) }
-            val result = onlineVideoStatusService.forceRefreshAll()
-            _uiState.update { it.copy(isRefreshingOnlineStatuses = false, onlineStatusRefreshResult = result) }
+            _uiState.update {
+                it.copy(
+                    isRefreshingOnlineStatuses = true,
+                    onlineStatusRefreshProgress = null,
+                    onlineStatusRefreshResult = null
+                )
+            }
+            val result = onlineVideoStatusService.forceRefreshAll { progress ->
+                _uiState.update { it.copy(onlineStatusRefreshProgress = progress) }
+            }
+            _uiState.update {
+                it.copy(
+                    isRefreshingOnlineStatuses = false,
+                    onlineStatusRefreshResult = result
+                )
+            }
         }
     }
 }
