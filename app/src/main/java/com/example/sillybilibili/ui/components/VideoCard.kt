@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -110,15 +111,18 @@ fun VideoCard(
             onClick = if (selectionMode) onSelect else onClick,
             onLongClick = if (selectionMode) onSelect else onLongClick
         ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = animatedContainer
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        border = CardDefaults.outlinedCardBorder(enabled = true).copy(brush = Brush.linearGradient(listOf(DarkDivider, accent.copy(alpha = 0.22f), DarkDivider)))
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) accent.copy(alpha = 0.52f) else DarkDivider.copy(alpha = 0.58f)
+        )
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(110.dp).padding(10.dp),
+            modifier = Modifier.fillMaxWidth().height(108.dp).padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -126,22 +130,22 @@ fun VideoCard(
                 Checkbox(checked = selected, onCheckedChange = { onSelect() })
             }
             VideoThumbnail(video = video, accent = accent, imageFailed = imageFailed, onImageFailed = { imageFailed = true })
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     if (video.ownerName.isNotBlank()) {
-                        Text(video.ownerName, style = MaterialTheme.typography.labelMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(video.ownerName, style = MaterialTheme.typography.labelSmall, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (video.resolutionLabel.isNotBlank()) {
                         Text("·", color = DarkTextTertiary)
                         Text(video.resolutionLabel, style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
                     }
                 }
-                Text(video.title, style = MaterialTheme.typography.bodyMedium, color = DarkTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(video.title, style = MaterialTheme.typography.titleSmall, color = DarkTextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // 时长已移到缩略图角标，这里保留分类、大小与在线状态
+                    // 时长已移到缩略图角标；分类与线上状态保留为标签，文件大小降级为文本，避免一排“按钮感”。
                     category?.let { CategoryBadge(it) }
                     if (video.duration <= 0L) VideoMeta(video.formattedDuration)
-                    VideoMeta(video.formattedSize)
+                    Text(video.formattedSize, style = MaterialTheme.typography.labelSmall, color = DarkTextTertiary, maxLines = 1)
                     OnlineStatusBadge(video.onlineStatus)
                 }
             }
