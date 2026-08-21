@@ -176,8 +176,9 @@ fun HomePage(
                         )
                         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
-                })
-            ) {
+                }),
+                showSecondaryActions = true,
+                secondaryActions = {
                 if (uiState.isSelectionMode) {
                     TextButton(onClick = viewModel::toggleSelectAllFiltered) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
                     IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, "完成选择", tint = DarkTextSecondary) }
@@ -194,18 +195,15 @@ fun HomePage(
                             contentDescription = if (uiState.gridViewEnabled) "切换到列表视图" else "切换到宫格视图"
                         )
                     }
-                    IconButton(onClick = onNavigateToScan) { Icon(Icons.Default.YoutubeSearchedFor, contentDescription = stringResource(R.string.scan_videos)) }
                     Box {
                         IconButton(onClick = { showMoreMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more)) }
                         DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.exported_videos)) }, leadingIcon = { Icon(Icons.Default.FolderOpen, null) }, onClick = { showMoreMenu = false; onNavigateToExported() })
                             DropdownMenuItem(text = { Text(stringResource(R.string.category_management)) }, leadingIcon = { Icon(Icons.Default.Category, null) }, onClick = { showMoreMenu = false; onNavigateToCategories() })
                             DropdownMenuItem(text = { Text(stringResource(R.string.user_guide)) }, leadingIcon = { Icon(Icons.Default.MenuBook, null) }, onClick = { showMoreMenu = false; onNavigateToGuide() })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_title)) }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { showMoreMenu = false; onNavigateToSettings() })
                         }
                     }
                 }
-            }
+            })
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = DarkBackground
@@ -382,4 +380,3 @@ private fun EmptyVideoLibrary(onScan: () -> Unit) {
         }
     )
 }
-

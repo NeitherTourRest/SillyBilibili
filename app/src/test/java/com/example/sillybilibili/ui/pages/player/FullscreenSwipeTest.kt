@@ -6,6 +6,11 @@ import org.junit.Test
 
 class FullscreenSwipeTest {
     @Test
+    fun `horizontal drag previews a bounded playback position`() {
+        assertEquals(75_000L, horizontalSwipeSeekPosition(30_000L, 180_000L, 1_000f, 500f))
+        assertEquals(0L, horizontalSwipeSeekPosition(10_000L, 90_000L, 1_000f, -500f))
+    }
+    @Test
     fun `upward swipe beyond threshold opens the next video`() {
         assertEquals(2, fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = -80f, viewportHeightPx = 1_000))
     }

@@ -4,8 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
@@ -41,7 +44,10 @@ fun AppTopBar(
     /** 自定义标题内容（如 logo + 应用名），优先于 title/subtitle。必须放在 actions 之前，
      *  否则 trailing lambda 会绑定到它而不是 actions。 */
     titleContent: (@Composable () -> Unit)? = null,
-    actions: @Composable RowScope.() -> Unit = {}
+    actions: @Composable RowScope.() -> Unit = {},
+    showSecondaryActions: Boolean = false,
+    /** Optional second action row keeps dense library toolbars from colliding with the title. */
+    secondaryActions: @Composable RowScope.() -> Unit = {}
 ) {
     Column(
         Modifier.fillMaxWidth().background(DarkBackground)
@@ -81,6 +87,12 @@ fun AppTopBar(
             Modifier.fillMaxWidth().height(2.dp).background(
                 Brush.horizontalGradient(listOf(GlassBorder, CyberVermilion.copy(alpha = 0.78f), CyberGold.copy(alpha = 0.50f), Color.Transparent))
             )
+        )
+        if (showSecondaryActions) Row(
+            modifier = Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+            content = secondaryActions
         )
     }
 }

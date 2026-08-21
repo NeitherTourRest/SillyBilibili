@@ -3,6 +3,7 @@ package com.example.sillybilibili.ui.pages.player
 import android.content.ComponentName
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.LayoutInflater
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
@@ -10,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -101,6 +104,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.sillybilibili.R
 import com.example.sillybilibili.service.PlaybackService
 import com.example.sillybilibili.service.CachePlaybackMetadata
 import com.example.sillybilibili.domain.model.ConversionStatus
@@ -173,6 +177,8 @@ fun PlayerPage(
     var settledSwipePreviewIndex by remember { mutableIntStateOf(-1) }
     var isLeavingPlayer by remember { mutableStateOf(false) }
     var isPlayerSurfaceAttached by remember { mutableStateOf(true) }
+    var playerViewportWidthPx by remember { mutableIntStateOf(0) }
+    var horizontalSeekPreviewMs by remember { mutableLongStateOf(-1L) }
     val playerDetailsListState = rememberLazyListState()
     var nonFullscreenViewportWidthPx by remember { mutableIntStateOf(0) }
     var portraitViewportHeightPx by remember { mutableIntStateOf(0) }
@@ -462,6 +468,7 @@ fun PlayerPage(
         viewportModifier
             .onSizeChanged { size ->
                 fullscreenViewportHeightPx = size.height
+                playerViewportWidthPx = size.width
                 if (!isFullscreen && nonFullscreenViewportWidthPx != size.width) {
                     nonFullscreenViewportWidthPx = size.width
                 }
@@ -489,7 +496,9 @@ fun PlayerPage(
         ) {
         AndroidView(
             factory = { viewContext ->
-                PlayerView(viewContext).apply {
+                (LayoutInflater.from(viewContext)
+                    .inflate(R.layout.view_player_texture, null, false) as PlayerView)
+                    .apply {
                     player = controller.takeIf { isPlayerSurfaceAttached }
                     // Media3 remains responsible for decoding and MediaSession integration.
                     // Compose provides a control hierarchy suited to this app's layout.
@@ -507,6 +516,44 @@ fun PlayerPage(
 
         Box(
             Modifier.fillMaxSize()
+                .pointerInput(controller, durationMs, positionMs, playerViewportWidthPx) {
+                    detectTapGestures(
+                        onTap = { controlsVisible = !controlsVisible },
+                        onDoubleTap = {
+                            controller?.let { if (it.isPlaying) it.pause() else it.play() }
+                            controlsVisible = false
+                        }
+                    )
+                }
+                .pointerInput(controller, durationMs, positionMs, playerViewportWidthPx) {
+                    if (durationMs > 0L && playerViewportWidthPx > 0) {
+                        var startPositionMs = 0L
+                        var totalDragPx = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                startPositionMs = controller?.currentPosition ?: positionMs
+                                totalDragPx = 0f
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                totalDragPx += dragAmount
+                                horizontalSeekPreviewMs = horizontalSwipeSeekPosition(
+                                    startPositionMs,
+                                    durationMs,
+                                    playerViewportWidthPx.toFloat(),
+                                    totalDragPx
+                                )
+                            },
+                            onDragEnd = {
+                                horizontalSeekPreviewMs.takeIf { it >= 0L }?.let { target ->
+                                    controller?.seekTo(target)
+                                    positionMs = target
+                                }
+                                horizontalSeekPreviewMs = -1L
+                            },
+                            onDragCancel = { horizontalSeekPreviewMs = -1L }
+                        )
+                    }
+                }
                 .pointerInput(isFullscreen, activeIndex, fullscreenViewportHeightPx, isSettlingFullscreenSwipe) {
                     if (isFullscreen && fullscreenViewportHeightPx > 0) {
                         detectVerticalDragGestures(
@@ -556,7 +603,6 @@ fun PlayerPage(
                         )
                     }
                 }
-                .clickable { controlsVisible = !controlsVisible }
         )
 
         if (controlsVisible) {
@@ -597,6 +643,12 @@ fun PlayerPage(
                 },
                 onToggleFullscreen = { setFullscreen(!isFullscreen) }
             )
+        }
+
+        horizontalSeekPreviewMs.takeIf { it >= 0L }?.let { target ->
+            Surface(modifier = Modifier.align(Alignment.Center), color = DarkSurface.copy(alpha = 0.9f), shape = RoundedCornerShape(14.dp)) {
+                Text("${formatPlaybackTime(target)} / ${formatPlaybackTime(durationMs)}", modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp), color = Color.White)
+            }
         }
 
         if (isLeavingPlayer) {
@@ -843,6 +895,13 @@ private fun formatPlaybackTime(timeMs: Long): String {
 
 /** The standard non-fullscreen frame used for landscape and unknown sources. */
 internal const val DEFAULT_PLAYER_VIEWPORT_ASPECT_RATIO = 16f / 9f
+
+/** Full-width drag is capped so accidental swipes cannot jump across an entire long video. */
+internal fun horizontalSwipeSeekPosition(startMs: Long, durationMs: Long, viewportWidthPx: Float, dragPx: Float): Long {
+    if (durationMs <= 0L || viewportWidthPx <= 0f) return startMs.coerceAtLeast(0L)
+    val maximumDeltaMs = minOf(90_000L, durationMs / 2L)
+    return (startMs + maximumDeltaMs * (dragPx / viewportWidthPx)).toLong().coerceIn(0L, durationMs)
+}
 
 /**
  * Builds a display aspect ratio from Media3's decoded video metadata. Pixel aspect ratio is
