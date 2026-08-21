@@ -72,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -179,6 +180,8 @@ fun PlayerPage(
     var isPlayerSurfaceAttached by remember { mutableStateOf(true) }
     var playerViewportWidthPx by remember { mutableIntStateOf(0) }
     var horizontalSeekPreviewMs by remember { mutableLongStateOf(-1L) }
+    var horizontalSeekStartMs by remember { mutableLongStateOf(0L) }
+    var playbackGestureHint by remember { mutableStateOf<String?>(null) }
     val playerDetailsListState = rememberLazyListState()
     var nonFullscreenViewportWidthPx by remember { mutableIntStateOf(0) }
     var portraitViewportHeightPx by remember { mutableIntStateOf(0) }
@@ -353,6 +356,13 @@ fun PlayerPage(
         }
     }
 
+    LaunchedEffect(playbackGestureHint) {
+        if (playbackGestureHint != null) {
+            delay(850)
+            playbackGestureHint = null
+        }
+    }
+
     fun leavePlayer() {
         if (isLeavingPlayer) return
         // Detach the Surface before NavHost changes composition. Otherwise SurfaceView can keep
@@ -520,7 +530,11 @@ fun PlayerPage(
                     detectTapGestures(
                         onTap = { controlsVisible = !controlsVisible },
                         onDoubleTap = {
-                            controller?.let { if (it.isPlaying) it.pause() else it.play() }
+                            controller?.let { player ->
+                                val pausePlayback = player.isPlaying
+                                if (pausePlayback) player.pause() else player.play()
+                                playbackGestureHint = if (pausePlayback) "已暂停" else "继续播放"
+                            }
                             controlsVisible = false
                         }
                     )
@@ -532,6 +546,7 @@ fun PlayerPage(
                         detectHorizontalDragGestures(
                             onDragStart = {
                                 startPositionMs = controller?.currentPosition ?: positionMs
+                                horizontalSeekStartMs = startPositionMs
                                 totalDragPx = 0f
                             },
                             onHorizontalDrag = { _, dragAmount ->
@@ -646,8 +661,17 @@ fun PlayerPage(
         }
 
         horizontalSeekPreviewMs.takeIf { it >= 0L }?.let { target ->
-            Surface(modifier = Modifier.align(Alignment.Center), color = DarkSurface.copy(alpha = 0.9f), shape = RoundedCornerShape(14.dp)) {
-                Text("${formatPlaybackTime(target)} / ${formatPlaybackTime(durationMs)}", modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp), color = Color.White)
+            Surface(modifier = Modifier.align(Alignment.Center), color = DarkSurface.copy(alpha = 0.88f), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 9.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(horizontalSeekPreviewHint(horizontalSeekStartMs, target), color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text("${formatPlaybackTime(target)} / ${formatPlaybackTime(durationMs)}", color = Color.White.copy(alpha = 0.74f), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+
+        playbackGestureHint?.takeIf { horizontalSeekPreviewMs < 0L }?.let { hint ->
+            Surface(modifier = Modifier.align(Alignment.Center), color = DarkSurface.copy(alpha = 0.88f), shape = RoundedCornerShape(14.dp)) {
+                Text(hint, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -804,10 +828,21 @@ private fun PlaybackControls(
 ) {
     val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
-    Column(
-        modifier = modifier.fillMaxSize().zIndex(2f),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
+    Box(modifier = modifier.fillMaxSize().zIndex(2f)) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.56f),
+                    0.24f to Color.Transparent,
+                    0.60f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = 0.78f)
+                )
+            )
+        )
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -871,6 +906,7 @@ private fun PlaybackControls(
         }
     }
 }
+}
 
 @Composable
 private fun CompactControlPill(
@@ -901,6 +937,12 @@ internal fun horizontalSwipeSeekPosition(startMs: Long, durationMs: Long, viewpo
     if (durationMs <= 0L || viewportWidthPx <= 0f) return startMs.coerceAtLeast(0L)
     val maximumDeltaMs = minOf(90_000L, durationMs / 2L)
     return (startMs + maximumDeltaMs * (dragPx / viewportWidthPx)).toLong().coerceIn(0L, durationMs)
+}
+
+internal fun horizontalSeekPreviewHint(startMs: Long, targetMs: Long): String {
+    val deltaMs = targetMs - startMs
+    val direction = if (deltaMs >= 0L) "快进" else "回退"
+    return "$direction ${formatPlaybackTime(abs(deltaMs))}"
 }
 
 /**

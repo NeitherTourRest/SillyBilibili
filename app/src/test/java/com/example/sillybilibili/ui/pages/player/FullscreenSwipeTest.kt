@@ -10,6 +10,12 @@ class FullscreenSwipeTest {
         assertEquals(75_000L, horizontalSwipeSeekPosition(30_000L, 180_000L, 1_000f, 500f))
         assertEquals(0L, horizontalSwipeSeekPosition(10_000L, 90_000L, 1_000f, -500f))
     }
+
+    @Test
+    fun `horizontal seek feedback states its direction and delta`() {
+        assertEquals("快进 0:45", horizontalSeekPreviewHint(30_000L, 75_000L))
+        assertEquals("回退 0:10", horizontalSeekPreviewHint(30_000L, 20_000L))
+    }
     @Test
     fun `upward swipe beyond threshold opens the next video`() {
         assertEquals(2, fullscreenSwipeTargetIndex(activeIndex = 1, itemCount = 4, offsetPx = -80f, viewportHeightPx = 1_000))
