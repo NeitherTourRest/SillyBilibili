@@ -90,7 +90,7 @@ fun VideoGridCard(
         label = "gridCardContainer"
     )
     val animatedBorder by animateColorAsState(
-        targetValue = if (selected) CyberVermilion else Color.Transparent,
+        targetValue = if (selected) CyberVermilion.copy(alpha = 0.52f) else DarkDivider.copy(alpha = 0.58f),
         animationSpec = tween(durationMillis = 180),
         label = "gridCardBorder"
     )
@@ -116,19 +116,22 @@ fun VideoGridCard(
             onClick = if (selectionMode) onSelect else onClick,
             onLongClick = if (selectionMode) onSelect else onLongClick
         ),
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = animatedContainer
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),
-        border = if (selectionMode) BorderStroke(1.5.dp, animatedBorder) else null
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        border = BorderStroke(
+            width = if (selectionMode) 1.5.dp else 1.dp,
+            color = if (selectionMode) animatedBorder else DarkDivider.copy(alpha = 0.58f)
+        )
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                     .background(DarkSurfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
@@ -151,7 +154,7 @@ fun VideoGridCard(
                         label = "gridCheckCircle"
                     )
                     Surface(
-                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
                         shape = CircleShape,
                         color = circleColor,
                         border = BorderStroke(1.5.dp, if (selected) CyberVermilion else DarkDivider)
@@ -172,14 +175,14 @@ fun VideoGridCard(
                     }
                 }
                 if (video.quality.isNotBlank()) {
-                    Surface(modifier = Modifier.align(Alignment.TopEnd).padding(8.dp), shape = RoundedCornerShape(7.dp), color = Color.Black.copy(alpha = 0.62f)) {
+                    Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = RoundedCornerShape(6.dp), color = Color.Black.copy(alpha = 0.62f)) {
                         Text(video.quality, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
                 if (video.duration > 0L) {
                     Surface(
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = Color.Black.copy(alpha = 0.72f)
                     ) {
                         Text(
