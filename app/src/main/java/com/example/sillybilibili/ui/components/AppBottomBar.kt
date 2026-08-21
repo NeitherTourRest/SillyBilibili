@@ -6,12 +6,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.YoutubeSearchedFor
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -31,17 +33,22 @@ val bottomTabs = listOf(
 
 @Composable
 fun AppBottomBar(currentRoute: String?, onNavigate: (String) -> Unit) {
-    NavigationBar(modifier = Modifier.height(72.dp), containerColor = DarkCard) {
+    NavigationBar(
+        modifier = Modifier.height(68.dp),
+        containerColor = DarkCard,
+        tonalElevation = 0.dp
+    ) {
         bottomTabs.forEach { tab ->
             NavigationBarItem(
                 selected = currentRoute == tab.route,
                 onClick = { onNavigate(tab.route) },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                label = { Text(tab.label) },
+                icon = { Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(22.dp)) },
+                label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = CyberVermilion,
                     selectedTextColor = CyberVermilion,
-                    indicatorColor = CyberVermilion.copy(alpha = 0.16f),
+                    indicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     unselectedIconColor = DarkTextSecondary,
                     unselectedTextColor = DarkTextSecondary
                 )
