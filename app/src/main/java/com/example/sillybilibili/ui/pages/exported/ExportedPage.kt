@@ -3,6 +3,7 @@ package com.example.sillybilibili.ui.pages.exported
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
@@ -55,8 +55,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -79,6 +77,7 @@ import coil.request.ImageRequest
 import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
+import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.FastScrollBar
 import com.example.sillybilibili.ui.components.SkeletonVideoList
@@ -273,16 +272,10 @@ private fun ExportedTopBar(
     onBatchCategory: () -> Unit,
     onBatchDelete: () -> Unit
 ) {
-    TopAppBar(
-        title = {
-            Column {
-                Text(if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else "已导出视频", fontWeight = FontWeight.Bold)
-                if (!uiState.isSelectionMode) Text("可独立管理的 MP4 文件", style = MaterialTheme.typography.labelSmall, color = DarkTextTertiary)
-            }
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = DarkTextPrimary) }
-        },
+    AppTopBar(
+        title = if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else "已导出视频",
+        subtitle = if (uiState.isSelectionMode) "可批量分类或删除当前筛选结果" else "可独立管理的 MP4 文件",
+        onNavigateBack = onBack,
         actions = {
             if (uiState.isSelectionMode) {
                 TextButton(onClick = onSelectAll, enabled = uiState.videos.isNotEmpty()) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
@@ -295,8 +288,7 @@ private fun ExportedTopBar(
                     else Icon(Icons.Default.Refresh, "刷新外部改动")
                 }
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground, titleContentColor = DarkTextPrimary)
+        }
     )
 }
 
@@ -411,8 +403,9 @@ private fun ExportedVideoCard(
             onLongClick = onLongClick
         ),
         colors = CardDefaults.cardColors(containerColor = if (isSelected) CyberVermilion.copy(alpha = 0.15f) else DarkCard),
-        shape = MaterialTheme.shapes.large,
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        border = BorderStroke(1.dp, if (isSelected) CyberVermilion.copy(alpha = 0.52f) else DarkDivider.copy(alpha = 0.58f))
     ) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isSelectionMode) Checkbox(checked = isSelected, onCheckedChange = { onSelect() })
