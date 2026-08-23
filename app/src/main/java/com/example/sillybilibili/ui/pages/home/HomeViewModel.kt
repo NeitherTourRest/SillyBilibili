@@ -382,6 +382,11 @@ class HomeViewModel @Inject constructor(
 
     fun enterSelectionMode() { _uiState.update { it.copy(isSelectionMode = true) } }
 
+    /** A long press is the only entry into bulk selection and immediately selects that item. */
+    fun startSelectionFromLongPress(videoId: Long) {
+        _uiState.update { it.copy(isSelectionMode = true, selectedIds = setOf(videoId)) }
+    }
+
     fun exitSelectionMode() {
         _uiState.update { it.copy(isSelectionMode = false, selectedIds = emptySet()) }
     }

@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sillybilibili.domain.model.Video
@@ -91,7 +92,6 @@ import com.example.sillybilibili.ui.components.SkeletonVideoList
 import com.example.sillybilibili.ui.components.VideoCard
 import com.example.sillybilibili.ui.components.VideoGridCard
 import com.example.sillybilibili.ui.components.rangeSelectDrag
-import com.example.sillybilibili.ui.components.VideoContextMenu
 import com.example.sillybilibili.ui.pages.scan.ScanViewModel
 import com.example.sillybilibili.ui.theme.CyberVermilion
 import com.example.sillybilibili.ui.theme.DarkBackground
@@ -120,7 +120,6 @@ fun HomePage(
     val gridState = rememberLazyGridState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var contextMenuVideo by remember { mutableStateOf<Video?>(null) }
     var assignDialogVideo by remember { mutableStateOf<Video?>(null) }
     var deleteConfirmVideo by remember { mutableStateOf<Video?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -173,18 +172,25 @@ fun HomePage(
                         Icon(
                             painter = painterResource(R.drawable.sillybilibili_sbb_mark),
                             contentDescription = null,
-                            modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp))
+                            modifier = Modifier.size(24.dp).clip(RoundedCornerShape(7.dp))
                         )
-                        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }),
-                showSecondaryActions = true,
-                secondaryActions = {
+                actions = {
                 if (uiState.isSelectionMode) {
                     TextButton(onClick = viewModel::toggleSelectAllFiltered) { Text(stringResource(R.string.select_all), color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
                     IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, stringResource(R.string.finish_selection), tint = DarkTextSecondary) }
                 } else {
-                    TextButton(onClick = viewModel::enterSelectionMode, enabled = uiState.videos.isNotEmpty()) { Text(stringResource(R.string.multi_select), color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    IconButton(onClick = onNavigateToCategories) {
+                        Icon(Icons.Default.Category, contentDescription = stringResource(R.string.category_management))
+                    }
                     IconButton(onClick = { filterDraft = uiState.filterState; showFilterSheet = true }) {
                         BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) {
                             Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.filter))
@@ -199,12 +205,12 @@ fun HomePage(
                     Box {
                         IconButton(onClick = { showMoreMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more)) }
                         DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.category_management)) }, leadingIcon = { Icon(Icons.Default.Category, null) }, onClick = { showMoreMenu = false; onNavigateToCategories() })
                             DropdownMenuItem(text = { Text(stringResource(R.string.user_guide)) }, leadingIcon = { Icon(Icons.Default.MenuBook, null) }, onClick = { showMoreMenu = false; onNavigateToGuide() })
                         }
                     }
                 }
-            })
+                }
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = DarkBackground
@@ -283,7 +289,7 @@ fun HomePage(
                             VideoGridCard(
                                 video = video,
                                 onClick = { latestOnNavigate(video, latestVideos) },
-                                onLongClick = { contextMenuVideo = video },
+                                onLongClick = { viewModel.startSelectionFromLongPress(video.id) },
                                 onCoverRequested = viewModel::requestCover,
                                 onOnlineStatusRequested = viewModel::requestOnlineStatus,
                                 selectionMode = uiState.isSelectionMode,
@@ -305,7 +311,7 @@ fun HomePage(
                             VideoCard(
                                 video = video,
                                 onClick = { latestOnNavigate(video, latestVideos) },
-                                onLongClick = { contextMenuVideo = video },
+                                onLongClick = { viewModel.startSelectionFromLongPress(video.id) },
                                 onCoverRequested = viewModel::requestCover,
                                 onOnlineStatusRequested = viewModel::requestOnlineStatus,
                                 selectionMode = uiState.isSelectionMode,
@@ -322,7 +328,6 @@ fun HomePage(
         }
     }
 
-    contextMenuVideo?.let { VideoContextMenu(it, onDismiss = { contextMenuVideo = null }, onRequestAssignCategory = { assignDialogVideo = it }, onRequestDelete = { deleteConfirmVideo = it }) }
     assignDialogVideo?.let { video -> AssignCategoryDialog(video, uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { categoryId -> viewModel.assignVideoToCategory(video.id, categoryId); assignDialogVideo = null; scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.category_updated)) } }) }
     deleteConfirmVideo?.let { video ->
         androidx.compose.material3.AlertDialog(

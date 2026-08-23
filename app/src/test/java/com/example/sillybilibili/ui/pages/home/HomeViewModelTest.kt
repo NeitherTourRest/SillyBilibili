@@ -385,6 +385,14 @@ class HomeViewModelTest {
         viewModel.exitSelectionMode()
         assertFalse(viewModel.uiState.value.isSelectionMode)
     }
+
+    @Test
+    fun `long press starts selection mode with the pressed video selected`() = runTest {
+        viewModel.startSelectionFromLongPress(42L)
+
+        assertTrue(viewModel.uiState.value.isSelectionMode)
+        assertEquals(setOf(42L), viewModel.uiState.value.selectedIds)
+    }
 }
 
 class StandardTestDispatcherRule : TestWatcher() {

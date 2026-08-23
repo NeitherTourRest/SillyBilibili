@@ -39,7 +39,6 @@
     <string name="home_selected_count">已选择 %1$d 项</string>
     <string name="select_all">全选</string>
     <string name="finish_selection">完成选择</string>
-    <string name="multi_select">多选</string>
     <string name="filter">筛选</string>
     <string name="switch_to_list">切换到列表视图</string>
     <string name="switch_to_grid">切换到宫格视图</string>

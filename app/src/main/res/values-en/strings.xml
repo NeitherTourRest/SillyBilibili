@@ -39,7 +39,6 @@
     <string name="home_selected_count">%1$d selected</string>
     <string name="select_all">Select all</string>
     <string name="finish_selection">Finish selection</string>
-    <string name="multi_select">Select</string>
     <string name="filter">Filter</string>
     <string name="switch_to_list">Switch to list view</string>
     <string name="switch_to_grid">Switch to grid view</string>
