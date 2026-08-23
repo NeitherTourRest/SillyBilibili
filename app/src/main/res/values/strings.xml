@@ -59,6 +59,8 @@
     <string name="filters_reset">筛选已重置</string>
     <string name="scanning_cache">正在扫描缓存</string>
     <string name="found_video_count">发现 %1$d 个视频</string>
+    <string name="library_result_count">当前结果 · %1$d 个视频</string>
+    <string name="library_scroll_hint">继续下滑加载更多</string>
     <string name="no_local_videos">还没有本地视频</string>
     <string name="no_local_videos_description">扫描 B 站缓存目录后，视频会显示在这里。</string>
     <string name="start_scan">开始扫描</string>

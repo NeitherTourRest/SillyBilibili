@@ -59,6 +59,8 @@
     <string name="filters_reset">Filters reset</string>
     <string name="scanning_cache">Scanning cache</string>
     <string name="found_video_count">Found %1$d videos</string>
+    <string name="library_result_count">%1$d videos in this view</string>
+    <string name="library_scroll_hint">Scroll for more</string>
     <string name="no_local_videos">No local videos yet</string>
     <string name="no_local_videos_description">Videos will appear here after scanning the Bilibili cache directory.</string>
     <string name="start_scan">Start scan</string>

@@ -80,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sillybilibili.domain.model.Video
+import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.R
 import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.BatchActionBar
@@ -228,27 +229,6 @@ fun HomePage(
                 ScanProgressBanner()
 
                 SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = stringResource(R.string.search_local_videos))
-            if (uiState.categories.isNotEmpty()) {
-                LazyRow(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        FilterChip(
-                            selected = uiState.selectedCategoryId == null,
-                            onClick = { viewModel.selectCategory(null); scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.showing_all_videos)) } },
-                            label = { Text(stringResource(R.string.all)) },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = CyberVermilion.copy(alpha = 0.2f), selectedLabelColor = CyberVermilion, containerColor = DarkSurfaceVariant, labelColor = DarkTextSecondary),
-                            border = FilterChipDefaults.filterChipBorder(borderColor = DarkDivider, selectedBorderColor = CyberVermilion, enabled = true, selected = uiState.selectedCategoryId == null)
-                        )
-                    }
-                    items(uiState.categories, key = { it.id }) { category ->
-                        CategoryChip(category.name, Color(category.color), category.videoCount, uiState.selectedCategoryId == category.id, onClick = {
-                            viewModel.selectCategory(category.id)
-                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.switched_to_category, category.name)) }
-                        })
-                    }
-                }
-            }
-
             }
 
             when {
@@ -285,6 +265,27 @@ fun HomePage(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        if (!uiState.isSelectionMode) {
+                            item(key = "home-library-filters", span = { GridItemSpan(maxLineSpan) }) {
+                                HomeLibraryHeader(
+                                    categories = uiState.categories,
+                                    selectedCategoryId = uiState.selectedCategoryId,
+                                    resultCount = uiState.videos.size,
+                                    onSelectCategory = { categoryId ->
+                                        viewModel.selectCategory(categoryId)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (categoryId == null) context.getString(R.string.showing_all_videos)
+                                                else context.getString(
+                                                    R.string.switched_to_category,
+                                                    uiState.categories.firstOrNull { it.id == categoryId }?.name.orEmpty()
+                                                )
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
                         gridItems(uiState.videos, key = { it.id }, contentType = { "video-grid" }) { video ->
                             VideoGridCard(
                                 video = video,
@@ -307,6 +308,27 @@ fun HomePage(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        if (!uiState.isSelectionMode) {
+                            item(key = "home-library-filters", contentType = "library-header") {
+                                HomeLibraryHeader(
+                                    categories = uiState.categories,
+                                    selectedCategoryId = uiState.selectedCategoryId,
+                                    resultCount = uiState.videos.size,
+                                    onSelectCategory = { categoryId ->
+                                        viewModel.selectCategory(categoryId)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (categoryId == null) context.getString(R.string.showing_all_videos)
+                                                else context.getString(
+                                                    R.string.switched_to_category,
+                                                    uiState.categories.firstOrNull { it.id == categoryId }?.name.orEmpty()
+                                                )
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
                         items(uiState.videos, key = { it.id }, contentType = { "video" }) { video ->
                             VideoCard(
                                 video = video,
@@ -340,6 +362,74 @@ fun HomePage(
         )
     }
     if (showFilterSheet) FilterSheet(currentFilter = filterDraft, onDraftFilterChange = { filterDraft = it }, onApplyFilter = { filter -> viewModel.applyFilter(filter); showFilterSheet = false; scope.launch { snackbarHostState.showSnackbar(context.getString(if (filter.isActive) R.string.filters_applied else R.string.filters_reset)) } }, onDismiss = { showFilterSheet = false })
+}
+
+/**
+ * Scrolls together with the library instead of permanently consuming the first screen. The
+ * compact summary retains orientation when browsing a large cached collection.
+ */
+@Composable
+private fun HomeLibraryHeader(
+    categories: List<Category>,
+    selectedCategoryId: Long?,
+    resultCount: Int,
+    onSelectCategory: (Long?) -> Unit
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp)) {
+        if (categories.isNotEmpty()) {
+            LazyRow(
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = selectedCategoryId == null,
+                        onClick = { onSelectCategory(null) },
+                        label = { Text(stringResource(R.string.all)) },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = CyberVermilion.copy(alpha = 0.20f),
+                            selectedLabelColor = CyberVermilion,
+                            containerColor = DarkSurfaceVariant,
+                            labelColor = DarkTextSecondary
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = DarkDivider,
+                            selectedBorderColor = CyberVermilion,
+                            enabled = true,
+                            selected = selectedCategoryId == null
+                        )
+                    )
+                }
+                items(categories, key = { it.id }) { category ->
+                    CategoryChip(
+                        name = category.name,
+                        color = Color(category.color),
+                        count = category.videoCount,
+                        selected = selectedCategoryId == category.id,
+                        onClick = { onSelectCategory(category.id) }
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.library_result_count, resultCount),
+                style = MaterialTheme.typography.labelLarge,
+                color = DarkTextSecondary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.library_scroll_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = DarkTextTertiary
+            )
+        }
+    }
 }
 
 /**
