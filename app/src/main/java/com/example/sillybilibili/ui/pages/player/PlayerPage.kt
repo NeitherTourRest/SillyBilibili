@@ -631,19 +631,29 @@ fun PlayerPage(
                 canGoNext = activeIndex < (queue?.items?.lastIndex ?: -1),
                 onBack = { if (isFullscreen) setFullscreen(false) else leavePlayer() },
                 onTogglePlayback = {
+                    controlsVisible = true
                     controller?.let { if (it.isPlaying) it.pause() else it.play() }
                 },
                 onPrevious = {
+                    controlsVisible = true
                     controller?.seekToDefaultPosition((activeIndex - 1).coerceAtLeast(0))
                     controller?.play()
                 },
                 onNext = {
+                    controlsVisible = true
                     controller?.seekToDefaultPosition((activeIndex + 1).coerceAtMost(queue?.items?.lastIndex ?: 0))
                     controller?.play()
                 },
-                onSeek = { fraction -> controller?.seekTo((durationMs * fraction).toLong()) },
-                onShowEpisodes = { showQueueSheet = true },
+                onSeek = { fraction ->
+                    controlsVisible = true
+                    controller?.seekTo((durationMs * fraction).toLong())
+                },
+                onShowEpisodes = {
+                    controlsVisible = true
+                    showQueueSheet = true
+                },
                 onChangeSpeed = {
+                    controlsVisible = true
                     val nextSpeed = when (playbackSpeed) {
                         1f -> 1.25f
                         1.25f -> 1.5f
@@ -653,7 +663,10 @@ fun PlayerPage(
                     controller?.setPlaybackSpeed(nextSpeed)
                     playbackSpeed = nextSpeed
                 },
-                onToggleFullscreen = { setFullscreen(!isFullscreen) }
+                onToggleFullscreen = {
+                    controlsVisible = true
+                    setFullscreen(!isFullscreen)
+                }
             )
         }
 
@@ -921,7 +934,7 @@ private fun CompactControlPill(
     }
 }
 
-private data class PlayerSurfaceGestureCallbacks(
+internal data class PlayerSurfaceGestureCallbacks(
     val isFullscreen: Boolean,
     val onTap: () -> Unit,
     val onDoubleTap: () -> Unit,
@@ -972,7 +985,7 @@ internal class PlayerSurfaceGestureRouter(private val touchSlopPx: Float) {
  * false keeps ordinary non-fullscreen vertical scroll available to the parent while ensuring the
  * detector observes every event that reaches the media surface.
  */
-private class PlayerSurfaceTouchListener(
+internal class PlayerSurfaceTouchListener(
     context: Context,
     private val callbacks: () -> PlayerSurfaceGestureCallbacks
 ) : View.OnTouchListener {
