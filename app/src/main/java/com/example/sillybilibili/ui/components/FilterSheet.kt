@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -116,7 +117,10 @@ private fun FilterSection(title: String, content: @Composable ColumnScope.() -> 
 
 @Composable
 private fun <T> FilterChipRow(options: List<Pair<T?, String>>, selected: T?, onSelect: (T?) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         options.forEach { (value, label) ->
             FilterChip(
                 selected = selected == value,

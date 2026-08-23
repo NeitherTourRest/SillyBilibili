@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -25,13 +27,16 @@ fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String = "Search...",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp,
+    verticalPadding: androidx.compose.ui.unit.Dp = 4.dp,
+    trailingActions: @Composable RowScope.() -> Unit = {}
 ) {
     var focused by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).height(46.dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = verticalPadding).height(46.dp).onFocusChanged { focused = it.isFocused },
         placeholder = { Text(placeholder, color = DarkTextTertiary, maxLines = 1) },
         leadingIcon = {
             Icon(
@@ -41,10 +46,13 @@ fun SearchBar(
             )
         },
         trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Clear, "清除", tint = DarkTextSecondary)
+            Row {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Default.Clear, "清除", tint = DarkTextSecondary)
+                    }
                 }
+                trailingActions()
             }
         },
         singleLine = true,

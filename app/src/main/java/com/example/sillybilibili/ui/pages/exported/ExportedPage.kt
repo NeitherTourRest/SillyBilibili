@@ -81,6 +81,7 @@ import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.FastScrollBar
 import com.example.sillybilibili.ui.components.SkeletonVideoList
+import com.example.sillybilibili.ui.components.SearchBar
 import com.example.sillybilibili.ui.theme.CyberVermilion
 import com.example.sillybilibili.ui.theme.DarkBackground
 import com.example.sillybilibili.ui.theme.DarkCard
@@ -301,21 +302,21 @@ private fun ExportedSearchAndFilters(
     onReset: () -> Unit
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
-        OutlinedTextField(
-            value = state.filter.query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-            singleLine = true,
-            shape = RoundedCornerShape(24.dp),
-            placeholder = { Text("搜索标题、UP、AV/CID 或导出文件名", maxLines = 1) },
-            leadingIcon = { Icon(Icons.Default.Search, null, Modifier.size(20.dp)) },
-            trailingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (state.filter.query.isNotBlank()) IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Default.Clear, "清空搜索") }
-                    IconButton(onClick = onFilterClick) { Icon(Icons.Default.FilterList, "更多筛选", tint = if (state.filter.isActive) CyberVermilion else DarkTextSecondary) }
+        SearchBar(
+            query = state.filter.query,
+            onQueryChange = onQueryChange,
+            placeholder = "搜索标题、UP、AV/CID 或导出文件名",
+            horizontalPadding = 0.dp,
+            verticalPadding = 6.dp,
+            trailingActions = {
+                IconButton(onClick = onFilterClick) {
+                    Icon(
+                        Icons.Default.FilterList,
+                        "更多筛选",
+                        tint = if (state.filter.isActive) CyberVermilion else DarkTextSecondary
+                    )
                 }
-            },
-            colors = exportedTextFieldColors()
+            }
         )
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 2.dp)) {
