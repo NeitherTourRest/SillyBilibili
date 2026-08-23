@@ -102,7 +102,6 @@ fun AppNavHost(navController: NavHostController) {
 
         composable(Screen.Scan.route) {
             ScanPage(
-                onNavigateBack = { navController.popBackStack() },
                 onNavigateToHome = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
@@ -112,9 +111,7 @@ fun AppNavHost(navController: NavHostController) {
         }
 
         composable(Screen.Settings.route) {
-            SettingsPage(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SettingsPage()
         }
 
         composable(route = Screen.VideoList.route, arguments = listOf(navArgument("categoryId") { type = NavType.LongType; defaultValue = -1L })) { entry ->

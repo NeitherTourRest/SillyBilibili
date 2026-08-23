@@ -64,12 +64,11 @@ import com.example.sillybilibili.ui.theme.DarkTextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsPage(
-    onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     Scaffold(
-        topBar = { AppTopBar(title = stringResource(R.string.settings_title), subtitle = stringResource(R.string.settings_subtitle), onNavigateBack = onNavigateBack) },
+        topBar = { AppTopBar(title = stringResource(R.string.settings_title), subtitle = stringResource(R.string.settings_subtitle)) },
         containerColor = DarkBackground
     ) { paddingValues ->
         Column(

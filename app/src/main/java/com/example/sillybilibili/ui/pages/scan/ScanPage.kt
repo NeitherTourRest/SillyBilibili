@@ -83,7 +83,6 @@ import com.example.sillybilibili.ui.theme.NeonRed
 
 @Composable
 fun ScanPage(
-    onNavigateBack: () -> Unit,
     onNavigateToHome: () -> Unit,
     viewModel: ScanViewModel = hiltViewModel()
 ) {
@@ -94,7 +93,7 @@ fun ScanPage(
     }
 
     androidx.compose.material3.Scaffold(
-        topBar = { AppTopBar(title = stringResource(R.string.scan_title), subtitle = stringResource(R.string.scan_subtitle), onNavigateBack = onNavigateBack) },
+        topBar = { AppTopBar(title = stringResource(R.string.scan_title), subtitle = stringResource(R.string.scan_subtitle)) },
         containerColor = DarkBackground
     ) { padding ->
         Column(
