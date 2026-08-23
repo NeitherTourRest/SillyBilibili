@@ -113,7 +113,7 @@ fun SettingsPage(
                     }
                     uiState.onlineStatusRefreshProgress?.takeIf { uiState.isRefreshingOnlineStatuses }?.let { progress ->
                         LinearProgressIndicator(
-                            progress = progress.fraction,
+                            progress = { progress.fraction },
                             modifier = Modifier.fillMaxWidth(),
                             color = NeonCyan,
                             trackColor = DarkSurfaceVariant
