@@ -1,6 +1,5 @@
 package com.example.sillybilibili.ui.pages.settings
 
-import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,7 +68,6 @@ fun SettingsPage(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val activity = LocalContext.current as? Activity
     Scaffold(
         topBar = { AppTopBar(title = stringResource(R.string.settings_title), subtitle = stringResource(R.string.settings_subtitle), onNavigateBack = onNavigateBack) },
         containerColor = DarkBackground
@@ -91,7 +88,6 @@ fun SettingsPage(
                                     if (uiState.appLanguage != language) {
                                         viewModel.updateAppLanguage(language)
                                         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language.languageTag))
-                                        activity?.recreate()
                                     }
                                 },
                                 shape = SegmentedButtonDefaults.itemShape(index, SettingsService.AppLanguage.entries.size),

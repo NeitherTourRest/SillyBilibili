@@ -3,9 +3,9 @@ package com.example.sillybilibili
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.lifecycleScope
 import com.example.sillybilibili.service.ExternalMediaSyncService
@@ -17,7 +17,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+/**
+ * AppCompatActivity is required for AppCompatDelegate to attach the selected
+ * application locale before Compose obtains its first Resources instance.
+ */
+class MainActivity : AppCompatActivity() {
     @Inject lateinit var externalMediaSyncService: ExternalMediaSyncService
     @Inject lateinit var settingsService: SettingsService
 

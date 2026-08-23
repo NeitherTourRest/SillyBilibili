@@ -114,6 +114,7 @@ fun HomePage(
     onNavigateToExported: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
@@ -165,7 +166,7 @@ fun HomePage(
     Scaffold(
         topBar = {
             AppTopBar(
-                title = if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else stringResource(R.string.app_name),
+                title = if (uiState.isSelectionMode) stringResource(R.string.home_selected_count, uiState.selectedIds.size) else stringResource(R.string.app_name),
                 titleContent = if (uiState.isSelectionMode) null else ({
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         // 用 PNG 前景图而非 adaptive-icon XML（后者在部分 ROM 上解码异常会闪退）
@@ -180,19 +181,19 @@ fun HomePage(
                 showSecondaryActions = true,
                 secondaryActions = {
                 if (uiState.isSelectionMode) {
-                    TextButton(onClick = viewModel::toggleSelectAllFiltered) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
-                    IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, "完成选择", tint = DarkTextSecondary) }
+                    TextButton(onClick = viewModel::toggleSelectAllFiltered) { Text(stringResource(R.string.select_all), color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    IconButton(onClick = viewModel::exitSelectionMode) { Icon(Icons.Default.Close, stringResource(R.string.finish_selection), tint = DarkTextSecondary) }
                 } else {
-                    TextButton(onClick = viewModel::enterSelectionMode, enabled = uiState.videos.isNotEmpty()) { Text("多选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
+                    TextButton(onClick = viewModel::enterSelectionMode, enabled = uiState.videos.isNotEmpty()) { Text(stringResource(R.string.multi_select), color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
                     IconButton(onClick = { filterDraft = uiState.filterState; showFilterSheet = true }) {
                         BadgedBox(badge = { if (uiState.filterState.isActive || uiState.searchQuery.isNotBlank()) Badge(containerColor = CyberVermilion) }) {
-                            Icon(Icons.Default.FilterList, contentDescription = "筛选")
+                            Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.filter))
                         }
                     }
                     IconButton(onClick = viewModel::toggleGridView) {
                         Icon(
                             if (uiState.gridViewEnabled) Icons.Filled.ViewAgenda else Icons.Default.GridView,
-                            contentDescription = if (uiState.gridViewEnabled) "切换到列表视图" else "切换到宫格视图"
+                            contentDescription = stringResource(if (uiState.gridViewEnabled) R.string.switch_to_list else R.string.switch_to_grid)
                         )
                     }
                     Box {
@@ -220,14 +221,14 @@ fun HomePage(
             } else {
                 ScanProgressBanner()
 
-                SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索本地视频")
+                SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = stringResource(R.string.search_local_videos))
             if (uiState.categories.isNotEmpty()) {
                 LazyRow(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         FilterChip(
                             selected = uiState.selectedCategoryId == null,
-                            onClick = { viewModel.selectCategory(null); scope.launch { snackbarHostState.showSnackbar("已显示全部视频") } },
-                            label = { Text("全部") },
+                            onClick = { viewModel.selectCategory(null); scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.showing_all_videos)) } },
+                            label = { Text(stringResource(R.string.all)) },
                             shape = RoundedCornerShape(20.dp),
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = CyberVermilion.copy(alpha = 0.2f), selectedLabelColor = CyberVermilion, containerColor = DarkSurfaceVariant, labelColor = DarkTextSecondary),
                             border = FilterChipDefaults.filterChipBorder(borderColor = DarkDivider, selectedBorderColor = CyberVermilion, enabled = true, selected = uiState.selectedCategoryId == null)
@@ -236,7 +237,7 @@ fun HomePage(
                     items(uiState.categories, key = { it.id }) { category ->
                         CategoryChip(category.name, Color(category.color), category.videoCount, uiState.selectedCategoryId == category.id, onClick = {
                             viewModel.selectCategory(category.id)
-                            scope.launch { snackbarHostState.showSnackbar("已切换到「${category.name}」") }
+                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.switched_to_category, category.name)) }
                         })
                     }
                 }
@@ -251,12 +252,12 @@ fun HomePage(
                     if (hasActiveQuery) {
                         EmptyStatePanel(
                             icon = Icons.Default.Search,
-                            title = "没有找到匹配的视频",
-                            subtitle = "试试其他关键词，或清除搜索与筛选条件。",
+                            title = stringResource(R.string.no_matching_videos),
+                            subtitle = stringResource(R.string.no_matching_videos_description),
                             accent = NeonPurple,
                             action = {
                                 TextButton(onClick = { viewModel.updateSearchQuery(""); viewModel.clearFilter(); viewModel.selectCategory(null) }) {
-                                    Text("清除搜索与筛选", color = NeonPurple)
+                                    Text(stringResource(R.string.clear_search_and_filters), color = NeonPurple)
                                 }
                             }
                         )
@@ -322,18 +323,18 @@ fun HomePage(
     }
 
     contextMenuVideo?.let { VideoContextMenu(it, onDismiss = { contextMenuVideo = null }, onRequestAssignCategory = { assignDialogVideo = it }, onRequestDelete = { deleteConfirmVideo = it }) }
-    assignDialogVideo?.let { video -> AssignCategoryDialog(video, uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { categoryId -> viewModel.assignVideoToCategory(video.id, categoryId); assignDialogVideo = null; scope.launch { snackbarHostState.showSnackbar("分类已更新") } }) }
+    assignDialogVideo?.let { video -> AssignCategoryDialog(video, uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { categoryId -> viewModel.assignVideoToCategory(video.id, categoryId); assignDialogVideo = null; scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.category_updated)) } }) }
     deleteConfirmVideo?.let { video ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteConfirmVideo = null },
             shape = MaterialTheme.shapes.large,
-            title = { Text("从列表移除视频") },
-            text = { Text("这不会删除原始缓存文件。") },
-            confirmButton = { TextButton(onClick = { viewModel.deleteVideo(video); deleteConfirmVideo = null; scope.launch { snackbarHostState.showSnackbar("视频已从列表移除") } }) { Text("移除", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { deleteConfirmVideo = null }) { Text("取消") } }
+            title = { Text(stringResource(R.string.remove_video_from_list)) },
+            text = { Text(stringResource(R.string.remove_video_from_list_description)) },
+            confirmButton = { TextButton(onClick = { viewModel.deleteVideo(video); deleteConfirmVideo = null; scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.video_removed_from_list)) } }) { Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deleteConfirmVideo = null }) { Text(stringResource(R.string.cancel)) } }
         )
     }
-    if (showFilterSheet) FilterSheet(currentFilter = filterDraft, onDraftFilterChange = { filterDraft = it }, onApplyFilter = { filter -> viewModel.applyFilter(filter); showFilterSheet = false; scope.launch { snackbarHostState.showSnackbar(if (filter.isActive) "筛选条件已应用" else "筛选已重置") } }, onDismiss = { showFilterSheet = false })
+    if (showFilterSheet) FilterSheet(currentFilter = filterDraft, onDraftFilterChange = { filterDraft = it }, onApplyFilter = { filter -> viewModel.applyFilter(filter); showFilterSheet = false; scope.launch { snackbarHostState.showSnackbar(context.getString(if (filter.isActive) R.string.filters_applied else R.string.filters_reset)) } }, onDismiss = { showFilterSheet = false })
 }
 
 /**
@@ -350,8 +351,8 @@ private fun ScanProgressBanner() {
     Surface(color = CyberVermilion.copy(alpha = 0.12f), shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("正在扫描缓存", style = MaterialTheme.typography.labelLarge, color = CyberVermilion)
-                Text("发现 ${progress.foundVideoCount} 个视频", style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
+                Text(stringResource(R.string.scanning_cache), style = MaterialTheme.typography.labelLarge, color = CyberVermilion)
+                Text(stringResource(R.string.found_video_count, progress.foundVideoCount), style = MaterialTheme.typography.labelMedium, color = DarkTextSecondary)
             }
             LinearProgressIndicator(
                 progress = { progress.processedFolders.toFloat() / progress.totalFolders.coerceAtLeast(1).toFloat() },
@@ -367,15 +368,15 @@ private fun ScanProgressBanner() {
 private fun EmptyVideoLibrary(onScan: () -> Unit) {
     EmptyStatePanel(
         icon = Icons.Default.VideoLibrary,
-        title = "还没有本地视频",
-        subtitle = "扫描 B 站缓存目录后，视频会显示在这里。",
+        title = stringResource(R.string.no_local_videos),
+        subtitle = stringResource(R.string.no_local_videos_description),
         action = {
             androidx.compose.material3.Button(
                 onClick = onScan,
                 shape = RoundedCornerShape(16.dp),
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = CyberVermilion)
             ) {
-                Icon(Icons.Default.YoutubeSearchedFor, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("开始扫描", fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Default.YoutubeSearchedFor, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.start_scan), fontWeight = FontWeight.SemiBold)
             }
         }
     )
