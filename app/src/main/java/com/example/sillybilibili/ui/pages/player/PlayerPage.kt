@@ -10,6 +10,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -617,8 +620,14 @@ fun PlayerPage(
             modifier = Modifier.fillMaxSize()
         )
 
-        if (controlsVisible) {
-            PlaybackControls(
+        Column(Modifier.fillMaxSize()) {
+            AnimatedVisibility(
+                visible = controlsVisible,
+                modifier = Modifier.fillMaxSize(),
+                enter = fadeIn(animationSpec = tween(durationMillis = 120)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 180))
+            ) {
+                PlaybackControls(
                 title = controller?.mediaMetadata?.title?.toString().orEmpty()
                     .ifBlank { queue?.items?.getOrNull(activeIndex)?.title.orEmpty() },
                 isFullscreen = isFullscreen,
@@ -667,7 +676,8 @@ fun PlayerPage(
                     controlsVisible = true
                     setFullscreen(!isFullscreen)
                 }
-            )
+                )
+            }
         }
 
         horizontalSeekPreviewMs.takeIf { it >= 0L }?.let { target ->
@@ -842,10 +852,10 @@ private fun PlaybackControls(
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.56f),
+                    0f to Color.Black.copy(alpha = 0.38f),
                     0.24f to Color.Transparent,
                     0.60f to Color.Transparent,
-                    1f to Color.Black.copy(alpha = 0.78f)
+                    1f to Color.Black.copy(alpha = 0.62f)
                 )
             )
         )
