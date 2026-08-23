@@ -109,6 +109,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
@@ -324,6 +325,23 @@ fun PlayerPage(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) playerError = null
+            }
+
+            override fun onIsPlayingChanged(playing: Boolean) {
+                // Transport controls, notifications and MediaSession callbacks do not have to
+                // wait for the defensive polling loop before their icon reflects the action.
+                isPlaying = playing
+            }
+
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                playbackSpeed = playbackParameters.speed
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val index = activeController.currentMediaItemIndex.coerceAtLeast(0)
+                activeIndex = index
+                positionMs = 0L
+                viewModel.preloadAdjacent(index)
             }
 
             override fun onRenderedFirstFrame() {
