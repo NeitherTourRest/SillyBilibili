@@ -123,7 +123,6 @@ fun ExportedPage(
             ExportedTopBar(
                 uiState = uiState,
                 onBack = { if (uiState.isSelectionMode) viewModel.clearSelection() else onNavigateBack() },
-                onStartSelection = viewModel::enterSelectionMode,
                 onSelectAll = viewModel::toggleSelectAll,
                 onRefresh = { viewModel.refreshExternalChanges() },
                 onBatchCategory = { showBatchCategory = true },
@@ -267,7 +266,6 @@ fun ExportedPage(
 private fun ExportedTopBar(
     uiState: ExportedUiState,
     onBack: () -> Unit,
-    onStartSelection: () -> Unit,
     onSelectAll: () -> Unit,
     onRefresh: () -> Unit,
     onBatchCategory: () -> Unit,
@@ -276,14 +274,15 @@ private fun ExportedTopBar(
     AppTopBar(
         title = if (uiState.isSelectionMode) "已选择 ${uiState.selectedIds.size} 项" else "已导出视频",
         subtitle = if (uiState.isSelectionMode) "可批量分类或删除当前筛选结果" else "可独立管理的 MP4 文件",
-        onNavigateBack = onBack,
+        // Exported is a first-level tab. Only selection mode needs a back affordance, where it
+        // exits the temporary mode rather than leaving the page.
+        onNavigateBack = onBack.takeIf { uiState.isSelectionMode },
         actions = {
             if (uiState.isSelectionMode) {
                 TextButton(onClick = onSelectAll, enabled = uiState.videos.isNotEmpty()) { Text("全选", color = CyberVermilion, fontWeight = FontWeight.SemiBold) }
                 IconButton(onClick = onBatchCategory, enabled = uiState.selectedIds.isNotEmpty()) { Icon(Icons.Default.Category, "批量分类") }
                 IconButton(onClick = onBatchDelete, enabled = uiState.selectedIds.isNotEmpty()) { Icon(Icons.Default.Delete, "批量删除", tint = NeonRed) }
             } else {
-                TextButton(onClick = onStartSelection, enabled = uiState.videos.isNotEmpty()) { Text("多选") }
                 IconButton(onClick = onRefresh, enabled = !uiState.isRefreshing) {
                     if (uiState.isRefreshing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = CyberVermilion)
                     else Icon(Icons.Default.Refresh, "刷新外部改动")
@@ -362,7 +361,11 @@ private fun ExportedLibrarySummary(state: ExportedUiState) {
         ) {
             Column {
                 Text("${state.videos.size} / ${state.totalExportedCount} 个 MP4", fontWeight = FontWeight.Bold, color = DarkTextPrimary)
-                Text(if (state.filter.isActive) "当前筛选结果" else "已导出文件库", style = MaterialTheme.typography.labelSmall, color = DarkTextTertiary)
+                Text(
+                    if (state.filter.isActive) "当前筛选结果 · 长按批量管理" else "已导出文件库 · 长按批量管理",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DarkTextTertiary
+                )
             }
             Text(formatSize(state.totalSize), style = MaterialTheme.typography.labelLarge, color = NeonCyan)
         }
