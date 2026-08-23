@@ -15,9 +15,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -57,8 +60,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -79,12 +80,16 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.consumeAllChanges
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -898,15 +903,10 @@ private fun PlaybackControls(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(formatPlaybackTime(positionMs), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelSmall)
-                Slider(
-                    value = progress,
-                    onValueChange = onSeek,
-                    modifier = Modifier.weight(1f).height(12.dp).padding(horizontal = 8.dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = CyberVermilionLight,
-                        activeTrackColor = CyberVermilion,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.28f)
-                    )
+                PlaybackProgressBar(
+                    progress = progress,
+                    onSeek = onSeek,
+                    modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                 )
                 Text(formatPlaybackTime(durationMs), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelSmall)
             }
@@ -935,6 +935,65 @@ private fun PlaybackControls(
         }
     }
 }
+}
+
+/**
+ * A compact seek control designed for a video HUD rather than a settings screen. It owns only
+ * gestures that start on the progress track, leaving the rest of the player surface available to
+ * the player gesture router.
+ */
+@Composable
+private fun PlaybackProgressBar(
+    progress: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(20.dp)
+            .pointerInput(onSeek) {
+                detectTapGestures { offset ->
+                    onSeek(playbackProgressAt(offset.x, size.width.toFloat()))
+                }
+            }
+            .pointerInput(onSeek) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        onSeek(playbackProgressAt(offset.x, size.width.toFloat()))
+                    },
+                    onDrag = { change, _ ->
+                        change.consumeAllChanges()
+                        onSeek(playbackProgressAt(change.position.x, size.width.toFloat()))
+                    }
+                )
+            }
+    ) {
+        val clampedProgress = progress.coerceIn(0f, 1f)
+        val trackHeight = 3.dp.toPx()
+        val centerY = size.height / 2f
+        val cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f)
+        val activeWidth = size.width * clampedProgress
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.30f),
+            topLeft = Offset(0f, centerY - trackHeight / 2f),
+            size = Size(size.width, trackHeight),
+            cornerRadius = cornerRadius
+        )
+        if (activeWidth > 0f) {
+            drawRoundRect(
+                color = CyberVermilion,
+                topLeft = Offset(0f, centerY - trackHeight / 2f),
+                size = Size(activeWidth, trackHeight),
+                cornerRadius = cornerRadius
+            )
+        }
+        drawCircle(
+            color = CyberVermilionLight,
+            radius = 4.5.dp.toPx(),
+            center = Offset(activeWidth, centerY)
+        )
+    }
 }
 
 @Composable
@@ -1071,6 +1130,9 @@ private fun formatPlaybackTime(timeMs: Long): String {
     val totalSeconds = (timeMs.coerceAtLeast(0L) / 1_000L).toInt()
     return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
+
+internal fun playbackProgressAt(positionX: Float, trackWidth: Float): Float =
+    if (trackWidth > 0f) (positionX / trackWidth).coerceIn(0f, 1f) else 0f
 
 /** The standard non-fullscreen frame used for landscape and unknown sources. */
 internal const val DEFAULT_PLAYER_VIEWPORT_ASPECT_RATIO = 16f / 9f
