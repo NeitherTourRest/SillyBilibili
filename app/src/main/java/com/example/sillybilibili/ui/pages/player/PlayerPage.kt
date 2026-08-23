@@ -414,10 +414,27 @@ fun PlayerPage(
         }
     }
 
+    fun togglePlayback(): Boolean? {
+        val player = controller ?: return null
+        val playingAfterToggle = !player.isPlaying
+        if (playingAfterToggle) player.play() else player.pause()
+        // The media session callback is asynchronous. Reflect a direct user action now rather
+        // than leaving the control icon to wait for the next polling pass.
+        isPlaying = playingAfterToggle
+        return playingAfterToggle
+    }
+
     fun switchToQueueIndex(index: Int) {
-        activeIndex = index
-        viewModel.preloadAdjacent(index)
-        controller?.seekToDefaultPosition(index)
+        val itemCount = queue?.items?.size ?: 0
+        if (itemCount == 0) return
+        val targetIndex = index.coerceIn(0, itemCount - 1)
+        // Title, selected episode and adjacent preload are all driven by this local state, so
+        // make them visible in the same frame as the tap/swipe that requested the change.
+        activeIndex = targetIndex
+        positionMs = 0L
+        isPlaying = true
+        viewModel.preloadAdjacent(targetIndex)
+        controller?.seekToDefaultPosition(targetIndex)
         controller?.play()
     }
 
@@ -455,11 +472,9 @@ fun PlayerPage(
                 animationSpec = tween(durationMillis = 120)
             ) { value, _ -> fullscreenSwipeOffsetPx = value }
 
-            activeIndex = targetIndex
             settledSwipePreviewIndex = targetIndex
             fullscreenSwipeOffsetPx = 0f
-            controller?.seekToDefaultPosition(targetIndex)
-            controller?.play()
+            switchToQueueIndex(targetIndex)
             isSettlingFullscreenSwipe = false
         }
     }
@@ -478,10 +493,8 @@ fun PlayerPage(
             isFullscreen = isFullscreen,
             onTap = { controlsVisible = !controlsVisible },
             onDoubleTap = {
-                controller?.let { player ->
-                    val pausePlayback = player.isPlaying
-                    if (pausePlayback) player.pause() else player.play()
-                    playbackGestureHint = if (pausePlayback) "已暂停" else "继续播放"
+                togglePlayback()?.let { playingAfterToggle ->
+                    playbackGestureHint = if (playingAfterToggle) "继续播放" else "已暂停"
                 }
                 controlsVisible = false
             },
@@ -641,17 +654,15 @@ fun PlayerPage(
                 onBack = { if (isFullscreen) setFullscreen(false) else leavePlayer() },
                 onTogglePlayback = {
                     controlsVisible = true
-                    controller?.let { if (it.isPlaying) it.pause() else it.play() }
+                    togglePlayback()
                 },
                 onPrevious = {
                     controlsVisible = true
-                    controller?.seekToDefaultPosition((activeIndex - 1).coerceAtLeast(0))
-                    controller?.play()
+                    switchToQueueIndex(activeIndex - 1)
                 },
                 onNext = {
                     controlsVisible = true
-                    controller?.seekToDefaultPosition((activeIndex + 1).coerceAtMost(queue?.items?.lastIndex ?: 0))
-                    controller?.play()
+                    switchToQueueIndex(activeIndex + 1)
                 },
                 onSeek = { fraction ->
                     controlsVisible = true
@@ -743,8 +754,7 @@ fun PlayerPage(
                     index = index,
                     selected = index == activeIndex,
                     onClick = {
-                        controller?.seekToDefaultPosition(index)
-                        controller?.play()
+                        switchToQueueIndex(index)
                     }
                 )
             }
@@ -787,8 +797,7 @@ fun PlayerPage(
                     val selected = index == activeIndex
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable {
-                            controller?.seekToDefaultPosition(index)
-                            controller?.play()
+                            switchToQueueIndex(index)
                             showQueueSheet = false
                         }.background(if (selected) CyberVermilionGlow else Color.Transparent).padding(horizontal = 24.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -991,9 +1000,9 @@ internal class PlayerSurfaceGestureRouter(private val touchSlopPx: Float) {
 }
 
 /**
- * PlayerView sits beneath Compose controls but receives bare-video touches directly. Returning
- * false keeps ordinary non-fullscreen vertical scroll available to the parent while ensuring the
- * detector observes every event that reaches the media surface.
+ * PlayerView sits beneath Compose controls but receives bare-video touches directly. Consume the
+ * entire stream once it reaches the media surface: some PlayerView/TextureView combinations only
+ * keep forwarding a gesture after the initial DOWN when their listener reports ownership.
  */
 internal class PlayerSurfaceTouchListener(
     context: Context,
@@ -1054,7 +1063,7 @@ internal class PlayerSurfaceTouchListener(
                 PlayerSurfaceGestureAxis.NONE -> Unit
             }
         }
-        return false
+        return true
     }
 }
 

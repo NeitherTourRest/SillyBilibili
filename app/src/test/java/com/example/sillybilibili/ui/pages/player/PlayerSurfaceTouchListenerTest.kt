@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -25,8 +26,8 @@ class PlayerSurfaceTouchListenerTest {
         val view = View(context)
         val start = SystemClock.uptimeMillis()
 
-        listener.onTouch(view, motionEvent(start, start, MotionEvent.ACTION_DOWN))
-        listener.onTouch(view, motionEvent(start, start + 40, MotionEvent.ACTION_UP))
+        assertTrue(listener.onTouch(view, motionEvent(start, start, MotionEvent.ACTION_DOWN)))
+        assertTrue(listener.onTouch(view, motionEvent(start, start + 40, MotionEvent.ACTION_UP)))
         shadowOf(Looper.getMainLooper()).idleFor(400, TimeUnit.MILLISECONDS)
 
         assertEquals(1, tapCount)
