@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -1274,42 +1275,53 @@ private fun PlayerSummaryHeader(
 ) {
     Column(
         modifier = modifier.fillMaxWidth().clickable(onClick = onShowDetails).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Text(
-            title.ifBlank { "正在播放" },
-            color = DarkTextPrimary,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("本地缓存 · 第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
-                currentCategory?.let { cat ->
-                    val catColor = Color(cat.color)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = catColor.copy(alpha = 0.14f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, catColor.copy(alpha = 0.36f))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Text(
+                text = title.ifBlank { "正在播放" },
+                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                color = DarkTextPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                modifier = Modifier.padding(top = 1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text("详情", color = CyberVermilion, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = CyberVermilion, modifier = Modifier.size(17.dp))
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Text("本地缓存", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+            Text("第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+            currentCategory?.let { cat ->
+                val catColor = Color(cat.color)
+                Surface(
+                    modifier = Modifier.widthIn(max = 104.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = catColor.copy(alpha = 0.14f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, catColor.copy(alpha = 0.36f))
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(
-                            Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(catColor))
-                            Text(cat.name, style = MaterialTheme.typography.labelSmall, color = catColor, maxLines = 1)
-                        }
+                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(catColor))
+                        Text(cat.name, style = MaterialTheme.typography.labelSmall, color = catColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                OnlineStatusBadge(onlineStatus)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("详情", color = CyberVermilion, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = CyberVermilion, modifier = Modifier.size(18.dp))
-            }
+            OnlineStatusBadge(onlineStatus)
         }
     }
 }
