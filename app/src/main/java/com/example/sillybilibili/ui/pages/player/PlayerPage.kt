@@ -1,18 +1,20 @@
 package com.example.sillybilibili.ui.pages.player
 
 import android.content.ComponentName
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -67,6 +69,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -76,7 +79,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -181,6 +183,7 @@ fun PlayerPage(
     var playerViewportWidthPx by remember { mutableIntStateOf(0) }
     var horizontalSeekPreviewMs by remember { mutableLongStateOf(-1L) }
     var horizontalSeekStartMs by remember { mutableLongStateOf(0L) }
+    var fullscreenSwipeStartOffsetPx by remember { mutableStateOf(0f) }
     var playbackGestureHint by remember { mutableStateOf<String?>(null) }
     val playerDetailsListState = rememberLazyListState()
     var nonFullscreenViewportWidthPx by remember { mutableIntStateOf(0) }
@@ -465,6 +468,93 @@ fun PlayerPage(
         settledTargetIndex = settledSwipePreviewIndex.takeIf { it >= 0 }
     )
 
+    // PlayerView can receive pointer events before a Compose sibling on several Android builds.
+    // Route all viewport gestures through the actual media view so taps never get lost.
+    val latestSurfaceGestures = rememberUpdatedState(
+        PlayerSurfaceGestureCallbacks(
+            isFullscreen = isFullscreen,
+            onTap = { controlsVisible = !controlsVisible },
+            onDoubleTap = {
+                controller?.let { player ->
+                    val pausePlayback = player.isPlaying
+                    if (pausePlayback) player.pause() else player.play()
+                    playbackGestureHint = if (pausePlayback) "已暂停" else "继续播放"
+                }
+                controlsVisible = false
+            },
+            onHorizontalStart = {
+                val startPosition = controller?.currentPosition ?: positionMs
+                horizontalSeekStartMs = startPosition
+                horizontalSeekPreviewMs = -1L
+            },
+            onHorizontalDrag = { totalDragPx ->
+                if (durationMs > 0L && playerViewportWidthPx > 0) {
+                    horizontalSeekPreviewMs = horizontalSwipeSeekPosition(
+                        horizontalSeekStartMs,
+                        durationMs,
+                        playerViewportWidthPx.toFloat(),
+                        totalDragPx
+                    )
+                }
+            },
+            onHorizontalEnd = {
+                horizontalSeekPreviewMs.takeIf { it >= 0L }?.let { target ->
+                    controller?.seekTo(target)
+                    positionMs = target
+                }
+                horizontalSeekPreviewMs = -1L
+            },
+            onHorizontalCancel = { horizontalSeekPreviewMs = -1L },
+            onVerticalStart = {
+                controlsVisible = false
+                swipeWarmupIndex = -1
+                fullscreenSwipeStartOffsetPx = fullscreenSwipeOffsetPx
+            },
+            onVerticalDrag = { totalDragPx ->
+                if (!isSettlingFullscreenSwipe && fullscreenViewportHeightPx > 0) {
+                    val proposedOffset = fullscreenSwipeStartOffsetPx + totalDragPx
+                    val adjacentIndex = fullscreenSwipeAdjacentIndex(
+                        activeIndex = activeIndex,
+                        itemCount = queue?.items?.size ?: 0,
+                        offsetPx = proposedOffset
+                    )
+                    if (
+                        adjacentIndex != null &&
+                        swipeWarmupIndex != adjacentIndex &&
+                        abs(proposedOffset) >= fullscreenViewportHeightPx * 0.02f
+                    ) {
+                        swipeWarmupIndex = adjacentIndex
+                        viewModel.preloadSwipeTarget(adjacentIndex)
+                    }
+                    fullscreenSwipeOffsetPx = if (adjacentIndex != null) {
+                        proposedOffset.coerceIn(
+                            -fullscreenViewportHeightPx.toFloat(),
+                            fullscreenViewportHeightPx.toFloat()
+                        )
+                    } else {
+                        (proposedOffset * 0.18f).coerceIn(
+                            -fullscreenViewportHeightPx * 0.18f,
+                            fullscreenViewportHeightPx * 0.18f
+                        )
+                    }
+                }
+            },
+            onVerticalEnd = ::settleFullscreenSwipe,
+            onVerticalCancel = {
+                scope.launch {
+                    animate(
+                        initialValue = fullscreenSwipeOffsetPx,
+                        targetValue = 0f,
+                        animationSpec = tween(durationMillis = 160)
+                    ) { value, _ -> fullscreenSwipeOffsetPx = value }
+                }
+            }
+        )
+    )
+    val playerSurfaceTouchListener = remember(context) {
+        PlayerSurfaceTouchListener(context) { latestSurfaceGestures.value }
+    }
+
     val viewportModifier = when {
         isFullscreen -> Modifier.fillMaxSize()
         portraitViewportHeights != null && portraitViewportHeightPx > 0 -> {
@@ -513,6 +603,8 @@ fun PlayerPage(
                     // Media3 remains responsible for decoding and MediaSession integration.
                     // Compose provides a control hierarchy suited to this app's layout.
                     useController = false
+                    isClickable = true
+                    setOnTouchListener(playerSurfaceTouchListener)
                     keepScreenOn = true
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
@@ -520,104 +612,9 @@ fun PlayerPage(
             update = { playerView ->
                 playerView.player = controller.takeIf { isPlayerSurfaceAttached }
                 playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                playerView.setOnTouchListener(playerSurfaceTouchListener)
             },
             modifier = Modifier.fillMaxSize()
-        )
-
-        Box(
-            Modifier.fillMaxSize()
-                .pointerInput(controller, durationMs, positionMs, playerViewportWidthPx) {
-                    detectTapGestures(
-                        onTap = { controlsVisible = !controlsVisible },
-                        onDoubleTap = {
-                            controller?.let { player ->
-                                val pausePlayback = player.isPlaying
-                                if (pausePlayback) player.pause() else player.play()
-                                playbackGestureHint = if (pausePlayback) "已暂停" else "继续播放"
-                            }
-                            controlsVisible = false
-                        }
-                    )
-                }
-                .pointerInput(controller, durationMs, positionMs, playerViewportWidthPx) {
-                    if (durationMs > 0L && playerViewportWidthPx > 0) {
-                        var startPositionMs = 0L
-                        var totalDragPx = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = {
-                                startPositionMs = controller?.currentPosition ?: positionMs
-                                horizontalSeekStartMs = startPositionMs
-                                totalDragPx = 0f
-                            },
-                            onHorizontalDrag = { _, dragAmount ->
-                                totalDragPx += dragAmount
-                                horizontalSeekPreviewMs = horizontalSwipeSeekPosition(
-                                    startPositionMs,
-                                    durationMs,
-                                    playerViewportWidthPx.toFloat(),
-                                    totalDragPx
-                                )
-                            },
-                            onDragEnd = {
-                                horizontalSeekPreviewMs.takeIf { it >= 0L }?.let { target ->
-                                    controller?.seekTo(target)
-                                    positionMs = target
-                                }
-                                horizontalSeekPreviewMs = -1L
-                            },
-                            onDragCancel = { horizontalSeekPreviewMs = -1L }
-                        )
-                    }
-                }
-                .pointerInput(isFullscreen, activeIndex, fullscreenViewportHeightPx, isSettlingFullscreenSwipe) {
-                    if (isFullscreen && fullscreenViewportHeightPx > 0) {
-                        detectVerticalDragGestures(
-                            onDragStart = {
-                                controlsVisible = false
-                                swipeWarmupIndex = -1
-                            },
-                            onVerticalDrag = { _, dragAmount ->
-                                if (!isSettlingFullscreenSwipe) {
-                                    val proposedOffset = fullscreenSwipeOffsetPx + dragAmount
-                                    val adjacentIndex = fullscreenSwipeAdjacentIndex(
-                                        activeIndex = activeIndex,
-                                        itemCount = queue?.items?.size ?: 0,
-                                        offsetPx = proposedOffset
-                                    )
-                                    if (
-                                        adjacentIndex != null &&
-                                        swipeWarmupIndex != adjacentIndex &&
-                                        abs(proposedOffset) >= fullscreenViewportHeightPx * 0.02f
-                                    ) {
-                                        swipeWarmupIndex = adjacentIndex
-                                        viewModel.preloadSwipeTarget(adjacentIndex)
-                                    }
-                                    fullscreenSwipeOffsetPx = if (adjacentIndex != null) {
-                                        proposedOffset.coerceIn(
-                                            -fullscreenViewportHeightPx.toFloat(),
-                                            fullscreenViewportHeightPx.toFloat()
-                                        )
-                                    } else {
-                                        (proposedOffset * 0.18f).coerceIn(
-                                            -fullscreenViewportHeightPx * 0.18f,
-                                            fullscreenViewportHeightPx * 0.18f
-                                        )
-                                    }
-                                }
-                            },
-                            onDragEnd = ::settleFullscreenSwipe,
-                            onDragCancel = {
-                                scope.launch {
-                                    animate(
-                                        initialValue = fullscreenSwipeOffsetPx,
-                                        targetValue = 0f,
-                                        animationSpec = tween(durationMillis = 160)
-                                    ) { value, _ -> fullscreenSwipeOffsetPx = value }
-                                }
-                            }
-                        )
-                    }
-                }
         )
 
         if (controlsVisible) {
@@ -921,6 +918,120 @@ private fun CompactControlPill(
     ) {
         icon?.invoke()
         Text(text, color = Color.White, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+private data class PlayerSurfaceGestureCallbacks(
+    val isFullscreen: Boolean,
+    val onTap: () -> Unit,
+    val onDoubleTap: () -> Unit,
+    val onHorizontalStart: () -> Unit,
+    val onHorizontalDrag: (Float) -> Unit,
+    val onHorizontalEnd: () -> Unit,
+    val onHorizontalCancel: () -> Unit,
+    val onVerticalStart: () -> Unit,
+    val onVerticalDrag: (Float) -> Unit,
+    val onVerticalEnd: () -> Unit,
+    val onVerticalCancel: () -> Unit
+)
+
+/** Keeps tap, seek and fullscreen switching mutually exclusive after touch slop is crossed. */
+internal enum class PlayerSurfaceGestureAxis { NONE, HORIZONTAL, VERTICAL }
+
+internal class PlayerSurfaceGestureRouter(private val touchSlopPx: Float) {
+    var axis: PlayerSurfaceGestureAxis = PlayerSurfaceGestureAxis.NONE
+        private set
+    var totalDragX: Float = 0f
+        private set
+    var totalDragY: Float = 0f
+        private set
+
+    fun reset() {
+        axis = PlayerSurfaceGestureAxis.NONE
+        totalDragX = 0f
+        totalDragY = 0f
+    }
+
+    fun dragBy(deltaX: Float, deltaY: Float, isFullscreen: Boolean): PlayerSurfaceGestureAxis {
+        totalDragX += deltaX
+        totalDragY += deltaY
+        if (axis != PlayerSurfaceGestureAxis.NONE) return axis
+        val dominantDistance = maxOf(abs(totalDragX), abs(totalDragY))
+        if (dominantDistance < touchSlopPx) return PlayerSurfaceGestureAxis.NONE
+        axis = when {
+            abs(totalDragX) >= abs(totalDragY) -> PlayerSurfaceGestureAxis.HORIZONTAL
+            isFullscreen -> PlayerSurfaceGestureAxis.VERTICAL
+            else -> PlayerSurfaceGestureAxis.NONE
+        }
+        return axis
+    }
+}
+
+/**
+ * PlayerView sits beneath Compose controls but receives bare-video touches directly. Returning
+ * false keeps ordinary non-fullscreen vertical scroll available to the parent while ensuring the
+ * detector observes every event that reaches the media surface.
+ */
+private class PlayerSurfaceTouchListener(
+    context: Context,
+    private val callbacks: () -> PlayerSurfaceGestureCallbacks
+) : View.OnTouchListener {
+    private val router = PlayerSurfaceGestureRouter(ViewConfiguration.get(context).scaledTouchSlop.toFloat())
+    private val detector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(event: MotionEvent): Boolean {
+            router.reset()
+            return true
+        }
+
+        override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+            callbacks().onTap()
+            return true
+        }
+
+        override fun onDoubleTap(event: MotionEvent): Boolean {
+            callbacks().onDoubleTap()
+            return true
+        }
+
+        override fun onScroll(
+            downEvent: MotionEvent?,
+            currentEvent: MotionEvent,
+            distanceX: Float,
+            distanceY: Float
+        ): Boolean {
+            val latest = callbacks()
+            val previousAxis = router.axis
+            val axis = router.dragBy(-distanceX, -distanceY, latest.isFullscreen)
+            when (axis) {
+                PlayerSurfaceGestureAxis.HORIZONTAL -> {
+                    if (previousAxis == PlayerSurfaceGestureAxis.NONE) latest.onHorizontalStart()
+                    latest.onHorizontalDrag(router.totalDragX)
+                }
+                PlayerSurfaceGestureAxis.VERTICAL -> {
+                    if (previousAxis == PlayerSurfaceGestureAxis.NONE) latest.onVerticalStart()
+                    latest.onVerticalDrag(router.totalDragY)
+                }
+                PlayerSurfaceGestureAxis.NONE -> Unit
+            }
+            return axis != PlayerSurfaceGestureAxis.NONE
+        }
+    })
+
+    override fun onTouch(view: View, event: MotionEvent): Boolean {
+        detector.onTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_UP -> when (router.axis) {
+                PlayerSurfaceGestureAxis.HORIZONTAL -> callbacks().onHorizontalEnd()
+                PlayerSurfaceGestureAxis.VERTICAL -> callbacks().onVerticalEnd()
+                PlayerSurfaceGestureAxis.NONE -> Unit
+            }
+            MotionEvent.ACTION_CANCEL -> when (router.axis) {
+                PlayerSurfaceGestureAxis.HORIZONTAL -> callbacks().onHorizontalCancel()
+                PlayerSurfaceGestureAxis.VERTICAL -> callbacks().onVerticalCancel()
+                PlayerSurfaceGestureAxis.NONE -> Unit
+            }
+        }
+        return false
     }
 }
 
