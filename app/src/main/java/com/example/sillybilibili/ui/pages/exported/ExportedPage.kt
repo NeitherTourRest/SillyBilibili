@@ -143,8 +143,6 @@ fun ExportedPage(
                 )
             }
 
-            ExportedLibrarySummary(uiState)
-
             when {
                 uiState.isLoading -> SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp))
                 uiState.videos.isEmpty() -> ExportedEmptyState(
@@ -155,9 +153,12 @@ fun ExportedPage(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        item(key = "exported-library-summary", contentType = "library-summary") {
+                            ExportedLibrarySummary(uiState)
+                        }
                         items(uiState.videos, key = { it.id }, contentType = { "exported-video" }) { video ->
                             LaunchedEffect(video.id, video.coverPath, video.exportedPath) {
                                 viewModel.requestCover(video)
@@ -178,7 +179,9 @@ fun ExportedPage(
                     }
                     FastScrollBar(
                         listState = listState,
-                        itemCount = uiState.videos.size,
+                        // The summary is a real lazy-list item, so include it in the rail's
+                        // geometry to keep drag positions aligned with rendered content.
+                        itemCount = uiState.videos.size + 1,
                         modifier = Modifier.align(Alignment.CenterEnd).padding(vertical = 12.dp)
                     )
                 }
@@ -350,7 +353,7 @@ private fun CategoryFilterChip(label: String, selected: Boolean, color: Color? =
 @Composable
 private fun ExportedLibrarySummary(state: ExportedUiState) {
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         color = DarkSurfaceVariant.copy(alpha = 0.72f),
         shape = MaterialTheme.shapes.medium
     ) {

@@ -88,6 +88,7 @@ import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
+import com.example.sillybilibili.ui.components.FastScrollBar
 import com.example.sillybilibili.ui.components.SearchBar
 import com.example.sillybilibili.ui.components.SkeletonVideoList
 import com.example.sillybilibili.ui.components.VideoCard
@@ -344,6 +345,13 @@ fun HomePage(
                         }
                         if (uiState.isLoadingMore) item(key = "home-switching-page", contentType = "loading") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = CyberVermilion) } }
                     }
+                    FastScrollBar(
+                        listState = listState,
+                        // The optional filter/summary header belongs to the same LazyColumn.
+                        // Include it so dragging the rail stays aligned with the rendered list.
+                        itemCount = uiState.videos.size + if (uiState.isSelectionMode) 0 else 1,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(vertical = 12.dp)
+                    )
                 }
                 }
             }
