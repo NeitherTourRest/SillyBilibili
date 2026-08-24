@@ -31,10 +31,7 @@ import com.example.sillybilibili.ui.theme.*
 fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPlayer: (Video, List<Video>) -> Unit, viewModel: VideoListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
-    var contextMenuVideo by remember { mutableStateOf<Video?>(null) }
-    var assignDialogVideo by remember { mutableStateOf<Video?>(null) }
     var showBatchCategory by remember { mutableStateOf(false) }
-    var deleteConfirmVideo by remember { mutableStateOf<Video?>(null) }
 
     val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
     val latestVideos by rememberUpdatedState(uiState.videos)
@@ -94,7 +91,7 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                         VideoCard(
                             video = video,
                             onClick = { latestOnNavigate(video, latestVideos) },
-                            onLongClick = { contextMenuVideo = video },
+                            onLongClick = { viewModel.startSelectionFromLongPress(video.id) },
                             onCoverRequested = viewModel::requestCover,
                             onOnlineStatusRequested = viewModel::requestOnlineStatus,
                             selectionMode = uiState.isSelectionMode,
@@ -113,8 +110,6 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
             }
         }
     }
-    if (contextMenuVideo != null) VideoContextMenu(video = contextMenuVideo!!, onDismiss = { contextMenuVideo = null }, onRequestAssignCategory = { assignDialogVideo = it }, onRequestDelete = { deleteConfirmVideo = it })
-    assignDialogVideo?.let { v -> AssignCategoryDialog(video = v, categories = uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { cid -> viewModel.assignVideoToCategory(v.id, cid); assignDialogVideo = null }) }
     if (showBatchCategory) {
         BatchAssignCategoryDialog(
             categories = uiState.categories,
@@ -126,5 +121,4 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
             }
         )
     }
-    deleteConfirmVideo?.let { v -> AlertDialog(onDismissRequest = { deleteConfirmVideo = null }, containerColor = DarkSurface, shape = MaterialTheme.shapes.large, title = { Text("从列表移除", fontWeight = FontWeight.Bold) }, text = { Text("这不会删除原始缓存文件。", color = DarkTextSecondary) }, confirmButton = { TextButton(onClick = { viewModel.deleteVideo(v); deleteConfirmVideo = null }) { Text("移除", color = NeonRed, fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { deleteConfirmVideo = null }) { Text("取消") } }) }
 }

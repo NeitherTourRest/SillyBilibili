@@ -281,6 +281,11 @@ class VideoListViewModel @Inject constructor(
 
     fun enterSelectionMode() { _uiState.update { it.copy(isSelectionMode = true) } }
 
+    /** Long press starts bulk selection and immediately includes the pressed card. */
+    fun startSelectionFromLongPress(videoId: Long) {
+        _uiState.update { it.copy(isSelectionMode = true, selectedIds = setOf(videoId)) }
+    }
+
     fun exitSelectionMode() {
         _uiState.update { it.copy(isSelectionMode = false, selectedIds = emptySet()) }
     }
