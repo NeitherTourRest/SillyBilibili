@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FactCheck
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -37,10 +38,11 @@ data class BatchProgress(val label: String, val done: Int, val total: Int) {
     val isFinished: Boolean get() = total > 0 && done >= total
 }
 
-/** 多选模式下的批量操作条：转换 MP4 / 刷新在线状态 / 完整性检查，下方附实时进度。 */
+/** 多选模式下的批量操作条：分类、转换、状态刷新与完整性检查，下方附实时进度。 */
 @Composable
 fun BatchActionBar(
     hasSelection: Boolean,
+    onAssignCategory: () -> Unit,
     onConvertToMp4: () -> Unit,
     onRefreshStatus: () -> Unit,
     onCheckIntegrity: () -> Unit,
@@ -52,7 +54,10 @@ fun BatchActionBar(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BatchAction("加入分类", Icons.Default.Category, hasSelection, onAssignCategory, Modifier.weight(1f))
             BatchAction("转换 MP4", Icons.Default.Movie, hasSelection, onConvertToMp4, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BatchAction("刷新状态", Icons.Default.Refresh, hasSelection, onRefreshStatus, Modifier.weight(1f))
             BatchAction("检查文件", Icons.Default.FactCheck, hasSelection, onCheckIntegrity, Modifier.weight(1f))
         }

@@ -196,3 +196,72 @@ fun AssignCategoryDialog(
     )
 }
 
+/** 为多选的视频批量设置分类；传入 null 可一次移除已有分类。 */
+@Composable
+fun BatchAssignCategoryDialog(
+    categories: List<Category>,
+    selectedCount: Int,
+    onDismiss: () -> Unit,
+    onAssign: (Long?) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurface,
+        shape = MaterialTheme.shapes.large,
+        title = {
+            Text(
+                "加入分类 · $selectedCount 个视频",
+                fontWeight = FontWeight.Bold,
+                color = CyberVermilion
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    "选择后会覆盖这些视频当前的分类。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DarkTextSecondary
+                )
+                Spacer(Modifier.height(12.dp))
+                if (categories.isEmpty()) {
+                    Text(
+                        "还没有分类，可先到分类管理中新建。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DarkTextSecondary
+                    )
+                } else {
+                    categories.forEach { category ->
+                        TextButton(
+                            onClick = { onAssign(category.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFE8E8F0))
+                        ) {
+                            Box(
+                                modifier = Modifier.size(12.dp).clip(RoundedCornerShape(6.dp))
+                                    .background(Color(category.color))
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(category.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+                HorizontalDivider(color = DarkDivider, modifier = Modifier.padding(vertical = 8.dp))
+                TextButton(
+                    onClick = { onAssign(null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonRed)
+                ) {
+                    Text("移除分类")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF606080))
+            ) { Text("取消") }
+        },
+        confirmButton = {}
+    )
+}
+

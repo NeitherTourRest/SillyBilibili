@@ -86,6 +86,7 @@ import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.BatchActionBar
 import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
+import com.example.sillybilibili.ui.components.BatchAssignCategoryDialog
 import com.example.sillybilibili.ui.components.CategoryChip
 import com.example.sillybilibili.ui.components.FilterSheet
 import com.example.sillybilibili.ui.components.FastScrollBar
@@ -123,6 +124,7 @@ fun HomePage(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var assignDialogVideo by remember { mutableStateOf<Video?>(null) }
+    var showBatchCategory by remember { mutableStateOf(false) }
     var deleteConfirmVideo by remember { mutableStateOf<Video?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var filterDraft by remember { mutableStateOf(FilterState()) }
@@ -221,6 +223,7 @@ fun HomePage(
             if (uiState.isSelectionMode) {
                 BatchActionBar(
                     hasSelection = uiState.selectedIds.isNotEmpty(),
+                    onAssignCategory = { showBatchCategory = true },
                     onConvertToMp4 = viewModel::batchConvertToMp4,
                     onRefreshStatus = viewModel::batchRefreshOnlineStatus,
                     onCheckIntegrity = viewModel::batchCheckIntegrity,
@@ -359,6 +362,17 @@ fun HomePage(
     }
 
     assignDialogVideo?.let { video -> AssignCategoryDialog(video, uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { categoryId -> viewModel.assignVideoToCategory(video.id, categoryId); assignDialogVideo = null; scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.category_updated)) } }) }
+    if (showBatchCategory) {
+        BatchAssignCategoryDialog(
+            categories = uiState.categories,
+            selectedCount = uiState.selectedIds.size,
+            onDismiss = { showBatchCategory = false },
+            onAssign = { categoryId ->
+                viewModel.assignSelectedToCategory(categoryId)
+                showBatchCategory = false
+            }
+        )
+    }
     deleteConfirmVideo?.let { video ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteConfirmVideo = null },

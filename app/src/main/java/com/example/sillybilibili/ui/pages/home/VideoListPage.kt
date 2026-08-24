@@ -33,6 +33,7 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
     val listState = rememberLazyListState()
     var contextMenuVideo by remember { mutableStateOf<Video?>(null) }
     var assignDialogVideo by remember { mutableStateOf<Video?>(null) }
+    var showBatchCategory by remember { mutableStateOf(false) }
     var deleteConfirmVideo by remember { mutableStateOf<Video?>(null) }
 
     val latestOnNavigate by rememberUpdatedState(onNavigateToPlayer)
@@ -71,6 +72,7 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
             if (uiState.isSelectionMode) {
                 BatchActionBar(
                     hasSelection = uiState.selectedIds.isNotEmpty(),
+                    onAssignCategory = { showBatchCategory = true },
                     onConvertToMp4 = viewModel::batchConvertToMp4,
                     onRefreshStatus = viewModel::batchRefreshOnlineStatus,
                     onCheckIntegrity = viewModel::batchCheckIntegrity,
@@ -113,5 +115,16 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
     }
     if (contextMenuVideo != null) VideoContextMenu(video = contextMenuVideo!!, onDismiss = { contextMenuVideo = null }, onRequestAssignCategory = { assignDialogVideo = it }, onRequestDelete = { deleteConfirmVideo = it })
     assignDialogVideo?.let { v -> AssignCategoryDialog(video = v, categories = uiState.categories, onDismiss = { assignDialogVideo = null }, onAssign = { cid -> viewModel.assignVideoToCategory(v.id, cid); assignDialogVideo = null }) }
+    if (showBatchCategory) {
+        BatchAssignCategoryDialog(
+            categories = uiState.categories,
+            selectedCount = uiState.selectedIds.size,
+            onDismiss = { showBatchCategory = false },
+            onAssign = { categoryId ->
+                viewModel.assignSelectedToCategory(categoryId)
+                showBatchCategory = false
+            }
+        )
+    }
     deleteConfirmVideo?.let { v -> AlertDialog(onDismissRequest = { deleteConfirmVideo = null }, containerColor = DarkSurface, shape = MaterialTheme.shapes.large, title = { Text("从列表移除", fontWeight = FontWeight.Bold) }, text = { Text("这不会删除原始缓存文件。", color = DarkTextSecondary) }, confirmButton = { TextButton(onClick = { viewModel.deleteVideo(v); deleteConfirmVideo = null }) { Text("移除", color = NeonRed, fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { deleteConfirmVideo = null }) { Text("取消") } }) }
 }

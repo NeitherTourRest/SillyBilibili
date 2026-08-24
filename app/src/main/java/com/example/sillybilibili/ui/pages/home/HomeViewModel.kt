@@ -366,6 +366,33 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 批量归类按选中 ID 回查，而不是只使用当前已渲染的卡片。
+     * 这样“全选筛选结果”跨分页时也不会漏掉暂未加载到屏幕上的视频。
+     */
+    fun assignSelectedToCategory(categoryId: Long?) {
+        val selectedIds = _uiState.value.selectedIds
+        if (selectedIds.isEmpty()) return
+        viewModelScope.launch {
+            var updatedCount = 0
+            selectedIds.forEach { videoId ->
+                videoRepository.getVideoById(videoId)?.let { video ->
+                    videoRepository.updateVideo(video.copy(categoryId = categoryId))
+                    updatedCount++
+                }
+            }
+            _categoryRefreshTrigger.value++
+            exitSelectionMode()
+            refreshVideos()
+            if (updatedCount > 0) {
+                showMessage(
+                    if (categoryId == null) "已移除 $updatedCount 个视频的分类"
+                    else "已将 $updatedCount 个视频加入分类"
+                )
+            }
+        }
+    }
+
     fun deleteVideo(video: Video) {
         viewModelScope.launch {
             videoRepository.deleteVideo(video)

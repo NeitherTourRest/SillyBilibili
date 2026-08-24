@@ -135,6 +135,7 @@ import com.example.sillybilibili.ui.theme.DarkSurfaceVariant
 import com.example.sillybilibili.ui.theme.DarkTextPrimary
 import com.example.sillybilibili.ui.theme.DarkTextSecondary
 import com.example.sillybilibili.ui.theme.GlassBorder
+import com.example.sillybilibili.ui.theme.NeonGreen
 import com.example.sillybilibili.ui.theme.NeonRed
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -758,6 +759,7 @@ fun PlayerPage(
                     activeIndex = activeIndex,
                     queueSize = queue?.items?.size ?: 0,
                     onlineStatus = onlineStatus,
+                    integrityStatus = integrityStatus,
                     currentCategory = currentCategory,
                     onShowDetails = { showDetailSheet = true }
                 )
@@ -1287,6 +1289,7 @@ private fun PlayerSummaryHeader(
     activeIndex: Int,
     queueSize: Int,
     onlineStatus: com.example.sillybilibili.domain.model.OnlineVideoStatus,
+    integrityStatus: com.example.sillybilibili.service.MediaIntegrityStatus?,
     currentCategory: com.example.sillybilibili.domain.model.Category?,
     onShowDetails: () -> Unit,
     modifier: Modifier = Modifier
@@ -1314,33 +1317,57 @@ private fun PlayerSummaryHeader(
                 Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = CyberVermilion, modifier = Modifier.size(17.dp))
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Text("本地缓存", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
-            Text("第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
-            currentCategory?.let { cat ->
-                val catColor = Color(cat.color)
-                Surface(
-                    modifier = Modifier.widthIn(max = 104.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = catColor.copy(alpha = 0.14f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, catColor.copy(alpha = 0.36f))
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Text("本地缓存", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+                Text("第 ${activeIndex + 1} / $queueSize 集", color = DarkTextSecondary, style = MaterialTheme.typography.bodySmall)
+                currentCategory?.let { cat ->
+                    val catColor = Color(cat.color)
+                    Surface(
+                        modifier = Modifier.widthIn(max = 104.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = catColor.copy(alpha = 0.14f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, catColor.copy(alpha = 0.36f))
                     ) {
-                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(catColor))
-                        Text(cat.name, style = MaterialTheme.typography.labelSmall, color = catColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(
+                            Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(catColor))
+                            Text(cat.name, style = MaterialTheme.typography.labelSmall, color = catColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
-            OnlineStatusBadge(onlineStatus)
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                OnlineStatusBadge(onlineStatus)
+                integrityStatus?.let { status -> IntegrityStatusBadge(status) }
+            }
         }
+    }
+}
+
+/** Compact equivalent of the online-status badge, shown after a manual integrity check. */
+@Composable
+private fun IntegrityStatusBadge(status: com.example.sillybilibili.service.MediaIntegrityStatus) {
+    val (label, color) = when (status) {
+        com.example.sillybilibili.service.MediaIntegrityStatus.OK -> "文件完整" to NeonGreen
+        com.example.sillybilibili.service.MediaIntegrityStatus.UNKNOWN -> "无法核验" to DarkTextSecondary
+        com.example.sillybilibili.service.MediaIntegrityStatus.VIDEO_MISSING -> "视频缺失" to CyberVermilion
+        com.example.sillybilibili.service.MediaIntegrityStatus.AUDIO_MISSING -> "音频缺失" to CyberVermilion
+        com.example.sillybilibili.service.MediaIntegrityStatus.BOTH_MISSING -> "文件缺失" to CyberVermilion
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = color.copy(alpha = 0.14f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.36f))
+    ) {
+        Text(label, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

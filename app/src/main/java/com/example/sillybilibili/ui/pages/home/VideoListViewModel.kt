@@ -245,6 +245,30 @@ class VideoListViewModel @Inject constructor(
         }
     }
 
+    /** 批量归类按选中 ID 回查，避免跨分页全选时只更新当前可见页。 */
+    fun assignSelectedToCategory(categoryId: Long?) {
+        val selectedIds = _uiState.value.selectedIds
+        if (selectedIds.isEmpty()) return
+        viewModelScope.launch {
+            var updatedCount = 0
+            selectedIds.forEach { videoId ->
+                videoRepository.getVideoById(videoId)?.let { video ->
+                    videoRepository.updateVideo(video.copy(categoryId = categoryId))
+                    updatedCount++
+                }
+            }
+            _categoryRefreshTrigger.value++
+            exitSelectionMode()
+            reload()
+            if (updatedCount > 0) {
+                showMessage(
+                    if (categoryId == null) "已移除 $updatedCount 个视频的分类"
+                    else "已将 $updatedCount 个视频加入分类"
+                )
+            }
+        }
+    }
+
     fun deleteVideo(video: Video) {
         viewModelScope.launch {
             videoRepository.deleteVideo(video)

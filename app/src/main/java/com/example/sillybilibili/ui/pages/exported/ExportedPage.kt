@@ -77,6 +77,7 @@ import coil.request.ImageRequest
 import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
+import com.example.sillybilibili.ui.components.BatchAssignCategoryDialog
 import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.FastScrollBar
@@ -528,30 +529,6 @@ private fun <T> ExportedFilterGroup(title: String, options: List<T>, selected: T
             items(options) { option -> FilterChip(selected = selected == option, onClick = { onSelected(option) }, label = { Text(label(option)) }) }
         }
     }
-}
-
-@Composable
-private fun BatchAssignCategoryDialog(categories: List<Category>, selectedCount: Int, onDismiss: () -> Unit, onAssign: (Long?) -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
-        title = { Text("为 $selectedCount 个视频设置分类", fontWeight = FontWeight.Bold) },
-        text = {
-            Column {
-                categories.forEach { category ->
-                    TextButton(onClick = { onAssign(category.id) }, modifier = Modifier.fillMaxWidth()) {
-                        Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(category.color)))
-                        Spacer(Modifier.width(10.dp))
-                        Text(category.name, Modifier.weight(1f), color = DarkTextPrimary)
-                    }
-                }
-                HorizontalDivider(color = DarkDivider)
-                TextButton(onClick = { onAssign(null) }, modifier = Modifier.fillMaxWidth()) { Text("移除分类", color = NeonRed) }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
 }
 
 @Composable
