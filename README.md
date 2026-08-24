@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="app/src/main/res/drawable-nodpi/sillybilibili_logo_tech.png" width="132" alt="SillyBilibili logo">
+</p>
+
 # SillyBilibili
 
 > 一个用于扫描、管理、播放与导出本地 B 站离线缓存的视频工具。
