@@ -58,6 +58,8 @@ Android 11 及以上通常会隔离 `/Android/data/` 目录。应用会先尝试
 
 应用内“使用指南”页也会显示当前连接状态；点击“检查 Shizuku”后会即时更新为“已连接”或提示下一步操作。
 
+使用指南中的 **Shizuku 配置指南** 已改为可展开的分组：包含 Android 11+ 无线调试、Android 10 及以下 ADB、MIUI/HyperOS、ColorOS、EMUI/HarmonyOS、vivo/iQOO、Flyme 与常见故障排查。请按实际品牌与系统版本展开对应项；不同 ROM 的菜单命名可能不同，优先在系统设置中搜索“开发者选项”“无线调试”或“后台运行”。
+
 常见问题：
 
 - 重启手机后，Shizuku 服务可能需要重新启动。
