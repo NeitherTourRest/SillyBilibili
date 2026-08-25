@@ -40,6 +40,13 @@
     <string name="select_all">Select all</string>
     <string name="finish_selection">Finish selection</string>
     <string name="filter">Filter</string>
+    <string name="sort">Sort</string>
+    <string name="sort_cache_time">Cache time</string>
+    <string name="sort_file_size">File size</string>
+    <string name="sort_duration">Video duration</string>
+    <string name="sort_published_at">Published time</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
     <string name="switch_to_list">Switch to list view</string>
     <string name="switch_to_grid">Switch to grid view</string>
     <string name="search_local_videos">Search local videos</string>

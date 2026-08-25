@@ -15,8 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.sillybilibili.R
 import com.example.sillybilibili.ui.pages.home.*
 import com.example.sillybilibili.ui.theme.*
 
@@ -81,6 +83,24 @@ fun FilterSheet(
             val covers = listOf(null to "全部", true to "有封面", false to "无封面")
             FilterSection("封面") { FilterChipRow(covers, currentFilter.hasCover) { onDraftFilterChange(currentFilter.copy(hasCover = it)) } }
 
+            FilterSection(stringResource(R.string.sort)) {
+                SortFieldRow(
+                    selected = currentFilter.sortField,
+                    onSelect = { field -> onDraftFilterChange(currentFilter.copy(sortField = field)) }
+                )
+                TextButton(onClick = {
+                    onDraftFilterChange(currentFilter.copy(sortAscending = !currentFilter.sortAscending))
+                }) {
+                    Text(
+                        stringResource(
+                            if (currentFilter.sortAscending) R.string.sort_ascending else R.string.sort_descending
+                        ),
+                        color = CyberVermilion,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
             // ── Bottom buttons ──
             Spacer(modifier = Modifier.height(4.dp))
             Row(
@@ -102,6 +122,41 @@ fun FilterSheet(
                     Text("确认", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SortFieldRow(selected: VideoSortField, onSelect: (VideoSortField) -> Unit) {
+    val options = listOf(
+        VideoSortField.CACHE_TIME to stringResource(R.string.sort_cache_time),
+        VideoSortField.FILE_SIZE to stringResource(R.string.sort_file_size),
+        VideoSortField.DURATION to stringResource(R.string.sort_duration),
+        VideoSortField.PUBLISHED_AT to stringResource(R.string.sort_published_at)
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        options.forEach { (field, label) ->
+            FilterChip(
+                selected = selected == field,
+                onClick = { onSelect(field) },
+                label = { Text(label, fontWeight = if (selected == field) FontWeight.Bold else FontWeight.Normal) },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = CyberVermilion.copy(alpha = 0.2f),
+                    containerColor = DarkSurfaceVariant,
+                    selectedLabelColor = CyberVermilion,
+                    labelColor = Color(0xFF8080A0)
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    borderColor = DarkDivider,
+                    selectedBorderColor = CyberVermilion,
+                    enabled = true,
+                    selected = selected == field
+                )
+            )
         }
     }
 }

@@ -170,7 +170,9 @@ class VideoRepositoryImpl @Inject constructor(
         hasCover: Int?,
         categoryId: Long?,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        sortField: String,
+        sortAscending: Boolean
     ): List<Video> {
         return videoDao.getFilteredVideosPaginated(
             query = query?.escapeForLike(),
@@ -183,6 +185,8 @@ class VideoRepositoryImpl @Inject constructor(
             minAddedAt = minAddedAt,
             hasCover = hasCover,
             categoryId = categoryId,
+            sortField = sortField,
+            sortAscending = if (sortAscending) 1 else 0,
             limit = pageSize,
             offset = page * pageSize
         ).map { it.toDomain() }

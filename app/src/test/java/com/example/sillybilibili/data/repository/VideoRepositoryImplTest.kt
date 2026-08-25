@@ -174,13 +174,14 @@ class VideoRepositoryImplTest {
 
     @Test
     fun `getFilteredVideosPaginated passes all parameters correctly`() = runTest {
-        coEvery { dao.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns emptyList()
+        coEvery { dao.getFilteredVideosPaginated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns emptyList()
 
         repo.getFilteredVideosPaginated(
             query = "test", qualityFilter = "1080P", isPortrait = 1,
             minDuration = 1000, maxDuration = 60000, minSize = 1000, maxSize = 1000000,
             minAddedAt = null, hasCover = 1, categoryId = 5,
-            page = 1, pageSize = 20
+            page = 1, pageSize = 20,
+            sortField = "PUBLISHED_AT", sortAscending = true
         )
 
         coVerify {
@@ -189,7 +190,8 @@ class VideoRepositoryImplTest {
                 qualityFilter = "1080P", isPortrait = 1,
                 minDuration = 1000, maxDuration = 60000, minSize = 1000, maxSize = 1000000,
                 minAddedAt = null, hasCover = 1, categoryId = 5,
-                limit = 20, offset = 20
+                limit = 20, offset = 20,
+                sortField = "PUBLISHED_AT", sortAscending = 1
             )
         }
     }

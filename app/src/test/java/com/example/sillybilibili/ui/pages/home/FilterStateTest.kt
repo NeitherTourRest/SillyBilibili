@@ -83,4 +83,30 @@ class FilterStateTest {
         val modified = original.copy(quality = "1080P")
         assertNotEquals(original, modified)
     }
+
+    @Test
+    fun `sort defaults to newest cached videos first`() {
+        val state = FilterState()
+
+        assertEquals(VideoSortField.CACHE_TIME, state.sortField)
+        assertFalse(state.sortAscending)
+    }
+
+    @Test
+    fun `sort field and direction can be changed independently`() {
+        val state = FilterState(
+            sortField = VideoSortField.PUBLISHED_AT,
+            sortAscending = true
+        )
+
+        assertEquals(VideoSortField.PUBLISHED_AT, state.sortField)
+        assertTrue(state.sortAscending)
+    }
+
+    @Test
+    fun `sort alone does not turn on filter indicator`() {
+        val state = FilterState(sortField = VideoSortField.FILE_SIZE)
+
+        assertFalse(state.isActive)
+    }
 }

@@ -68,6 +68,8 @@ interface VideoRepository {
         hasCover: Int?,
         categoryId: Long?,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        sortField: String = "CACHE_TIME",
+        sortAscending: Boolean = false
     ): List<Video>
 }

@@ -50,10 +50,21 @@ enum class TimeRange(val label: String, val minusMs: Long) {
     TODAY("today", 86_400_000), WEEK("7days", 604_800_000), MONTH("30days", 2_592_000_000)
 }
 
+/** Sort keys supported by the paginated home/category library query. */
+enum class VideoSortField {
+    CACHE_TIME,
+    FILE_SIZE,
+    DURATION,
+    PUBLISHED_AT
+}
+
 data class FilterState(
     val quality: String? = null, val orientation: Orientation? = null,
     val durationRange: DurationRange? = null, val sizeRange: SizeRange? = null,
-    val timeRange: TimeRange? = null, val hasCover: Boolean? = null
+    val timeRange: TimeRange? = null, val hasCover: Boolean? = null,
+    /** First seen by this app; newer caches remain the default library order. */
+    val sortField: VideoSortField = VideoSortField.CACHE_TIME,
+    val sortAscending: Boolean = false
 ) {
     val isActive: Boolean get() = quality != null || orientation != null || durationRange != null || sizeRange != null || timeRange != null || hasCover != null
 }
@@ -274,6 +285,8 @@ class HomeViewModel @Inject constructor(
             minAddedAt = fs.filter.timeRange?.let { fs.timeAnchorMs - it.minusMs },
             hasCover = fs.filter.hasCover?.let { if (it) 1 else 0 },
             categoryId = categoryId,
+            sortField = fs.filter.sortField.name,
+            sortAscending = fs.filter.sortAscending,
             page = page,
             pageSize = pageSize
         )

@@ -209,6 +209,8 @@ class VideoListViewModel @Inject constructor(
             minAddedAt = fs.filter.timeRange?.let { fs.timeAnchorMs - it.minusMs },
             hasCover = fs.filter.hasCover?.let { if (it) 1 else 0 },
             categoryId = categoryId,
+            sortField = fs.filter.sortField.name,
+            sortAscending = fs.filter.sortAscending,
             page = page,
             pageSize = pageSize
         )

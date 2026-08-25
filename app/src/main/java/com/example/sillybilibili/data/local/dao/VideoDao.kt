@@ -103,7 +103,17 @@ interface VideoDao {
         AND (:minAddedAt IS NULL OR addedAt >= :minAddedAt)
         AND (:hasCover IS NULL OR (CASE WHEN coverPath IS NOT NULL THEN 1 ELSE 0 END) = :hasCover)
         AND (:categoryId IS NULL OR categoryId = :categoryId)
-        ORDER BY addedAt DESC
+        -- Keep videos with an unknown online publish time at the end in both directions.
+        ORDER BY CASE WHEN :sortField = 'PUBLISHED_AT' AND pubdate <= 0 THEN 1 ELSE 0 END ASC,
+        CASE WHEN :sortField = 'FILE_SIZE' AND :sortAscending = 1 THEN size END ASC,
+        CASE WHEN :sortField = 'DURATION' AND :sortAscending = 1 THEN duration END ASC,
+        CASE WHEN :sortField = 'CACHE_TIME' AND :sortAscending = 1 THEN addedAt END ASC,
+        CASE WHEN :sortField = 'PUBLISHED_AT' AND :sortAscending = 1 THEN pubdate END ASC,
+        CASE WHEN :sortField = 'FILE_SIZE' AND :sortAscending = 0 THEN size END DESC,
+        CASE WHEN :sortField = 'DURATION' AND :sortAscending = 0 THEN duration END DESC,
+        CASE WHEN :sortField = 'CACHE_TIME' AND :sortAscending = 0 THEN addedAt END DESC,
+        CASE WHEN :sortField = 'PUBLISHED_AT' AND :sortAscending = 0 THEN pubdate END DESC,
+        id DESC
         LIMIT :limit OFFSET :offset
     """)
     suspend fun getFilteredVideosPaginated(
@@ -118,7 +128,9 @@ interface VideoDao {
         hasCover: Int?,         // 是否有封面（1=有, 0=无, null=不限）
         categoryId: Long?,      // 分类 ID（null = 不限分类）
         limit: Int,             // 每页多少条（PAGE_SIZE = 20）
-        offset: Int             // 跳过前 offset 条
+        offset: Int,            // 跳过前 offset 条
+        sortField: String = "CACHE_TIME", // CACHE_TIME / FILE_SIZE / DURATION / PUBLISHED_AT
+        sortAscending: Int = 0  // 1=升序，0=降序
     ): List<VideoEntity>
 
     // --- 写入操作 ---

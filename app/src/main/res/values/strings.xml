@@ -40,6 +40,13 @@
     <string name="select_all">全选</string>
     <string name="finish_selection">完成选择</string>
     <string name="filter">筛选</string>
+    <string name="sort">排序</string>
+    <string name="sort_cache_time">缓存时间</string>
+    <string name="sort_file_size">文件大小</string>
+    <string name="sort_duration">视频时长</string>
+    <string name="sort_published_at">视频发布时间</string>
+    <string name="sort_ascending">升序</string>
+    <string name="sort_descending">降序</string>
     <string name="switch_to_list">切换到列表视图</string>
     <string name="switch_to_grid">切换到宫格视图</string>
     <string name="search_local_videos">搜索本地视频</string>
