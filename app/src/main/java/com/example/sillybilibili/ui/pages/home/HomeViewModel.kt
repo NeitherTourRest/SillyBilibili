@@ -1,6 +1,5 @@
 package com.example.sillybilibili.ui.pages.home
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sillybilibili.domain.model.Category
@@ -9,8 +8,7 @@ import com.example.sillybilibili.domain.model.Video
 import com.example.sillybilibili.domain.repository.CategoryRepository
 import com.example.sillybilibili.ui.components.BatchProgress
 import com.example.sillybilibili.domain.repository.VideoRepository
-import com.example.sillybilibili.service.ConversionForegroundService
-import com.example.sillybilibili.service.ConversionJobRegistry
+import com.example.sillybilibili.service.ConversionBatchCoordinator
 import com.example.sillybilibili.service.MediaIntegrityChecker
 import com.example.sillybilibili.service.MediaIntegrityStatus
 import com.example.sillybilibili.service.VideoScanService
@@ -19,11 +17,8 @@ import com.example.sillybilibili.service.ExternalMediaSyncService
 import com.example.sillybilibili.service.COVER_RETRY_INTERVAL_MS
 import com.example.sillybilibili.service.OnlineVideoStatusService
 import com.example.sillybilibili.service.SettingsService
-import com.example.sillybilibili.service.VideoConverterService
 import com.example.sillybilibili.service.shouldPersistCoverPath
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -129,10 +124,8 @@ class HomeViewModel @Inject constructor(
     private val externalMediaSyncService: ExternalMediaSyncService? = null,
     private val onlineVideoStatusService: OnlineVideoStatusService? = null,
     private val integrityChecker: MediaIntegrityChecker? = null,
-    private val conversionJobRegistry: ConversionJobRegistry? = null,
     private val settingsService: SettingsService? = null,
-    private val videoConverterService: VideoConverterService? = null,
-    @ApplicationContext private val appContext: Context? = null
+    private val conversionBatchCoordinator: ConversionBatchCoordinator? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -163,15 +156,24 @@ class HomeViewModel @Inject constructor(
     /** 可注入的时间源（测试中用于推进限频重试间隔）。 */
     internal var coverClock: () -> Long = System::currentTimeMillis
 
-    /** 批量转换队列：一次只跑一个，前一个结束后自动启动下一个。 */
-    private val conversionQueue = ArrayDeque<Video>()
-    private var conversionPump: Job? = null
-
     private val _debouncedSearch = _searchQuery.debounce(SEARCH_DEBOUNCE_MS).distinctUntilChanged()
 
     init {
         loadCategories(); loadVideos(); reconcileExternalFiles()
         _uiState.update { it.copy(gridViewEnabled = settingsService?.gridViewEnabled ?: false) }
+        conversionBatchCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.state.collect { batch ->
+                    _uiState.update {
+                        it.copy(
+                            batchProgress = if (batch.isRunning) {
+                                BatchProgress("转换 MP4", batch.done, batch.total)
+                            } else null
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun reconcileExternalFiles() {
@@ -485,62 +487,34 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun selectedVideos(): List<Video> {
+    /** Used by the non-conversion batch actions, which currently operate on visible cards only. */
+    internal fun selectedVideos(): List<Video> {
         val state = _uiState.value
         return state.videos.filter { it.id in state.selectedIds }
     }
 
-    /** 批量转换计数（用于进度条）。 */
-    private var conversionLaunchedCount = 0
-    private var conversionTotal = 0
-
-    /** 批量转换为 MP4：一次一个，逐个排队执行（由前台服务串行处理）。 */
+    /** 将所选 ID 重新从数据库取全，避免“跨分页全选”只转换当前页。 */
     fun batchConvertToMp4() {
-        val videos = selectedVideos()
-        if (videos.isEmpty()) return
+        val selectedIds = _uiState.value.selectedIds
+        if (selectedIds.isEmpty()) return
         exitSelectionMode()
-        val registry = conversionJobRegistry ?: return
-        val context = appContext ?: return
-        conversionQueue.addAll(videos)
-        conversionLaunchedCount = 0
-        conversionTotal = videos.size
-        _uiState.update { it.copy(batchProgress = BatchProgress("转换 MP4", 0, videos.size)) }
-        showMessage("已加入 ${videos.size} 个转换任务，将逐个执行")
-        if (conversionPump == null) {
-            conversionPump = viewModelScope.launch {
-                registry.jobs.collect { jobs ->
-                    launchNextConversion(context)
-                    // 队列与注册表都清空后收尾进度条
-                    if (conversionQueue.isEmpty() && jobs.isEmpty() && conversionTotal > 0) {
-                        _uiState.update { it.copy(batchProgress = null) }
-                        conversionTotal = 0
-                    }
+        val coordinator = conversionBatchCoordinator
+        if (coordinator == null) {
+            showMessage("转换服务不可用，请重启应用后重试")
+            return
+        }
+        viewModelScope.launch {
+            val videos = selectedIds.map { videoRepository.getVideoById(it) }.filterNotNull()
+            val result = coordinator.enqueue(videos)
+            val missing = selectedIds.size - videos.size
+            showMessage(
+                buildString {
+                    append("已加入 ${result.queued} 个转换任务，将逐个在后台执行")
+                    if (result.skippedAlreadyRunning > 0) append("；${result.skippedAlreadyRunning} 个正在转换")
+                    if (missing > 0) append("；${missing} 个已不存在")
                 }
-            }
-        }
-        launchNextConversion(context)
-    }
-
-    private fun launchNextConversion(context: Context) {
-        val registry = conversionJobRegistry ?: return
-        val next = conversionQueue.firstOrNull() ?: return
-        if (registry.isRunning(next.id)) return
-        conversionQueue.removeFirst()
-        conversionLaunchedCount++
-        if (conversionTotal > 0) {
-            _uiState.update { it.copy(batchProgress = BatchProgress("转换 MP4", conversionLaunchedCount, conversionTotal)) }
-        }
-        val outputDir = settingsService?.outputPath ?: videoConverterService?.getDefaultOutputPath() ?: return
-        ConversionForegroundService.start(
-            context,
-            ConversionForegroundService.ConversionRequest(
-                videoId = next.id,
-                videoPath = next.path,
-                audioPath = next.audioPath,
-                outputDir = outputDir,
-                outputFileName = next.title
             )
-        )
+        }
     }
 
     /** 批量强制刷新在线状态（忽略缓存窗口），带实时进度。 */

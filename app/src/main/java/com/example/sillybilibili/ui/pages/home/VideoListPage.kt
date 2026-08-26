@@ -76,6 +76,7 @@ fun VideoListPage(categoryId: Long?, onNavigateBack: () -> Unit, onNavigateToPla
                     progress = uiState.batchProgress
                 )
             } else {
+                uiState.batchProgress?.let { BatchConversionStatusBanner(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = "搜索此分类")
             }
             if (uiState.isLoading) SkeletonVideoList(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp))

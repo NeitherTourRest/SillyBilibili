@@ -20,6 +20,26 @@ import java.nio.ByteBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Allocates a safe, non-destructive MP4 output path. Kept outside the Android service so its
+ * collision rules can be unit tested without a media extractor.
+ */
+internal fun allocateConversionOutputFile(outputDir: File, requestedName: String, videoId: Long): File {
+    val safeTitle = requestedName
+        .replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
+        .trim()
+        .take(96)
+        .ifBlank { "SillyBilibili" }
+    val baseName = if (videoId > 0) "$safeTitle [cache-$videoId]" else safeTitle
+    var index = 1
+    var candidate = File(outputDir, "$baseName.mp4")
+    while (candidate.exists()) {
+        index++
+        candidate = File(outputDir, "$baseName ($index).mp4")
+    }
+    return candidate
+}
+
 // Remux video.m4s + audio.m4s → single .mp4
 
 @Singleton
@@ -124,7 +144,7 @@ class VideoConverterService @Inject constructor(
             close(); return@callbackFlow
         }
 
-        val outputFile = File(outputDirFile, "$outputFileName.mp4")
+        val outputFile = allocateConversionOutputFile(outputDirFile, outputFileName, videoId)
         trySend(ConversionProgress(videoId, outputFileName, 0f, ConversionStatus.PENDING, statusMessage = "正在读取音视频轨道…"))
 
         var videoExtractor: MediaExtractor? = null
@@ -237,7 +257,7 @@ class VideoConverterService @Inject constructor(
     }
 
     suspend fun convertToMp4Suspend(
-        videoPath: String, audioPath: String, outputDir: String, outputFileName: String
+        videoPath: String, audioPath: String, outputDir: String, outputFileName: String, videoId: Long = 0
     ): Result<String> = withContext(kotlinx.coroutines.Dispatchers.IO) {
         val actualVideoPath = ensureAccessible(videoPath) ?: return@withContext Result.failure(Exception("Cannot access video file"))
         val actualAudioPath = ensureAccessible(audioPath) ?: return@withContext Result.failure(Exception("Cannot access audio file"))
@@ -245,7 +265,7 @@ class VideoConverterService @Inject constructor(
         val (outputDirFile, outputError) = ensureOutputWritable(outputDir)
         if (outputError != null) return@withContext Result.failure(Exception(outputError))
 
-        val outputFile = File(outputDirFile, "$outputFileName.mp4")
+        val outputFile = allocateConversionOutputFile(outputDirFile, outputFileName, videoId)
 
         var videoExtractor: MediaExtractor? = null
         var audioExtractor: MediaExtractor? = null

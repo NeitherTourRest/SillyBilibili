@@ -43,7 +43,12 @@ class ConversionForegroundService : Service() {
             status = ConversionStatus.PENDING,
             statusMessage = "正在准备转换文件…"
         )
-        if (!jobRegistry.begin(pending)) return START_NOT_STICKY
+        if (request.isPreRegistered) {
+            if (!jobRegistry.isRunning(request.videoId)) return START_NOT_STICKY
+            jobRegistry.update(pending)
+        } else if (!jobRegistry.begin(pending)) {
+            return START_NOT_STICKY
+        }
 
         showForegroundNotification(pending)
         serviceScope.launch {
@@ -126,6 +131,7 @@ class ConversionForegroundService : Service() {
         private const val EXTRA_AUDIO_PATH = "audio_path"
         private const val EXTRA_OUTPUT_DIR = "output_dir"
         private const val EXTRA_OUTPUT_NAME = "output_name"
+        private const val EXTRA_PRE_REGISTERED = "pre_registered"
 
         fun start(context: Context, request: ConversionRequest) {
             val intent = Intent(context, ConversionForegroundService::class.java)
@@ -135,6 +141,7 @@ class ConversionForegroundService : Service() {
                 .putExtra(EXTRA_AUDIO_PATH, request.audioPath)
                 .putExtra(EXTRA_OUTPUT_DIR, request.outputDir)
                 .putExtra(EXTRA_OUTPUT_NAME, request.outputFileName)
+                .putExtra(EXTRA_PRE_REGISTERED, request.isPreRegistered)
             ContextCompat.startForegroundService(context, intent)
         }
     }
@@ -144,7 +151,9 @@ class ConversionForegroundService : Service() {
         val videoPath: String,
         val audioPath: String,
         val outputDir: String,
-        val outputFileName: String
+        val outputFileName: String,
+        /** The app-wide batch coordinator has already reserved this video in [ConversionJobRegistry]. */
+        val isPreRegistered: Boolean = false
     ) {
         companion object {
             fun from(intent: Intent): ConversionRequest? {
@@ -153,8 +162,9 @@ class ConversionForegroundService : Service() {
                 val audioPath = intent.getStringExtra(EXTRA_AUDIO_PATH)
                 val outputDir = intent.getStringExtra(EXTRA_OUTPUT_DIR)
                 val outputName = intent.getStringExtra(EXTRA_OUTPUT_NAME)
+                val isPreRegistered = intent.getBooleanExtra(EXTRA_PRE_REGISTERED, false)
                 return if (id > 0 && videoPath != null && audioPath != null && outputDir != null && outputName != null) {
-                    ConversionRequest(id, videoPath, audioPath, outputDir, outputName)
+                    ConversionRequest(id, videoPath, audioPath, outputDir, outputName, isPreRegistered)
                 } else null
             }
         }

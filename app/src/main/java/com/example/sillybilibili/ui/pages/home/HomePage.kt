@@ -84,6 +84,7 @@ import com.example.sillybilibili.domain.model.Category
 import com.example.sillybilibili.R
 import com.example.sillybilibili.ui.components.AppTopBar
 import com.example.sillybilibili.ui.components.BatchActionBar
+import com.example.sillybilibili.ui.components.BatchConversionStatusBanner
 import com.example.sillybilibili.ui.components.EmptyStatePanel
 import com.example.sillybilibili.ui.components.AssignCategoryDialog
 import com.example.sillybilibili.ui.components.BatchAssignCategoryDialog
@@ -230,6 +231,7 @@ fun HomePage(
                     progress = uiState.batchProgress
                 )
             } else {
+                uiState.batchProgress?.let { BatchConversionStatusBanner(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 ScanProgressBanner()
 
                 SearchBar(query = uiState.searchQuery, onQueryChange = viewModel::updateSearchQuery, placeholder = stringResource(R.string.search_local_videos))

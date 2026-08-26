@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,6 +37,36 @@ import com.example.sillybilibili.ui.theme.DarkTextTertiary
 data class BatchProgress(val label: String, val done: Int, val total: Int) {
     val fraction: Float get() = if (total <= 0) 0f else (done.toFloat() / total).coerceIn(0f, 1f)
     val isFinished: Boolean get() = total > 0 && done >= total
+}
+
+/** Persistent, compact feedback after a batch conversion leaves selection mode. */
+@Composable
+fun BatchConversionStatusBanner(progress: BatchProgress, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = CyberVermilion.copy(alpha = 0.10f),
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Movie, null, Modifier.size(16.dp), tint = CyberVermilion)
+                Spacer(Modifier.width(7.dp))
+                Text("正在后台转换 MP4", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text("${progress.done}/${progress.total}", style = MaterialTheme.typography.labelSmall, color = DarkTextSecondary)
+            }
+            LinearProgressIndicator(
+                progress = { progress.fraction },
+                modifier = Modifier.fillMaxWidth().height(4.dp),
+                color = CyberVermilion,
+                trackColor = CyberVermilion.copy(alpha = 0.16f)
+            )
+        }
+    }
 }
 
 /** 多选模式下的批量操作条：分类、转换、状态刷新与完整性检查，下方附实时进度。 */
